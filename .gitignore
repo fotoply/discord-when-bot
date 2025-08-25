@@ -4,4 +4,9 @@ dist/
 .DS_Store
 .idea/
 *.log
+# SQLite data
+/data/
+*.db
+*.db-wal
+*.db-shm
 

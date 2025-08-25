@@ -13,11 +13,14 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc -p .",
-    "typecheck": "tsc -p . --noEmit"
+    "typecheck": "tsc -p . --noEmit",
+    "smoke:create": "tsx scripts/persist-create.ts",
+    "smoke:load": "tsx scripts/persist-load.ts"
   },
   "dependencies": {
     "@sapphire/framework": "latest",
     "@sapphire/decorators": "latest",
+    "better-sqlite3": "^9.4.3",
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.5"
   },
