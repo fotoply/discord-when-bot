@@ -1,0 +1,29 @@
+{
+  "name": "discord-when-bot",
+  "main": "dist/index.js",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A Discord bot using Sapphire Framework that creates availability polls by date.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc -p .",
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "@sapphire/framework": "latest",
+    "@sapphire/decorators": "latest",
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.12",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.4"
+  }
+}
