@@ -3,6 +3,7 @@
 A minimal Discord bot built with the Sapphire Framework that creates availability polls for a date range. Users can click buttons to mark which dates they’re available.
 
 ## Features
+
 - Slash command `/when` shows two dropdowns to pick a date range from valid upcoming dates (up to the next 25 days)
 - Poll message shows buttons for each date (max 25), labeled like `Fri Aug 29`
 - Message includes a per-date list of responders and a combined list of all voters
@@ -10,12 +11,14 @@ A minimal Discord bot built with the Sapphire Framework that creates availabilit
 - Persistent polls backed by a local SQLite database (survive restarts)
 
 ## Prerequisites
+
 - Node.js 18.17+ (LTS recommended)
 - A Discord application/bot with a Bot Token and the following permissions:
   - Send Messages
   - Use Application Commands
 
 ## Setup
+
 1. Clone this repo.
 2. Create your env file:
    - Copy `.env.example` to `.env` and set `DISCORD_TOKEN`.
@@ -29,6 +32,7 @@ A minimal Discord bot built with the Sapphire Framework that creates availabilit
      ```
 
 ## Running
+
 - Dev (TypeScript with watch):
   ```sh
   npm run dev
@@ -42,6 +46,7 @@ A minimal Discord bot built with the Sapphire Framework that creates availabilit
 When the bot is ready, you’ll see "Bot is ready." in your console.
 
 ## Using the Bot
+
 1. Invite the bot to your server with the `applications.commands` scope.
 2. In a channel, run `/when`.
 3. In the ephemeral setup UI:
@@ -52,6 +57,7 @@ When the bot is ready, you’ll see "Bot is ready." in your console.
 If the bot restarts, users can continue to interact with existing poll messages; state is loaded from SQLite on demand.
 
 ## Data Persistence (SQLite)
+
 - The database is initialized on first run and stored at `./data/when.db` by default (configurable via `WHEN_DB_PATH`).
 - Schema:
   - `polls(id, channel_id, creator_id, message_id, closed)`
@@ -60,7 +66,9 @@ If the bot restarts, users can continue to interact with existing poll messages;
 - Foreign keys are enforced; writes are wrapped where useful for consistency.
 
 ### Quick smoke test (optional)
+
 You can verify persistence locally without Discord:
+
 ```sh
 # Create a poll and write its ID to data/smoke.json
 npm run smoke:create
@@ -69,6 +77,7 @@ npm run smoke:load
 ```
 
 ## Configuration
+
 - `src/index.ts` boots the Sapphire client.
 - `src/commands/when.ts` defines the `/when` command and shows the dropdowns.
 - `src/listeners/interactionCreate.ts` handles dropdowns, creates the poll, toggles, and message updates.
@@ -77,6 +86,7 @@ npm run smoke:load
 - `src/util/date.ts` provides date validation, range building, and human-readable labels.
 
 ## Troubleshooting
+
 - If the command doesn’t appear:
   - For global registration, it can take up to ~1 hour to propagate.
   - For instant dev registration, set `GUILD_ID` in your `.env`.
@@ -87,4 +97,5 @@ npm run smoke:load
   - Ensure the bot is invited to the server.
 
 ## License
+
 MIT

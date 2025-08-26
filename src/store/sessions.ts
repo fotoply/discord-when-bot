@@ -21,4 +21,3 @@ class SessionStore {
 }
 
 export const Sessions = new SessionStore();
-

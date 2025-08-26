@@ -15,17 +15,20 @@
     "build": "tsc -p .",
     "typecheck": "tsc -p . --noEmit",
     "smoke:create": "tsx scripts/persist-create.ts",
-    "smoke:load": "tsx scripts/persist-load.ts"
+    "smoke:load": "tsx scripts/persist-load.ts",
+    "format": "prettier --write ."
   },
   "dependencies": {
-    "@sapphire/framework": "latest",
     "@sapphire/decorators": "latest",
+    "@sapphire/framework": "latest",
     "better-sqlite3": "^9.4.3",
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.5"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.14.12",
+    "prettier": "^3.6.2",
     "tsx": "^4.16.2",
     "typescript": "^5.5.4"
   }
