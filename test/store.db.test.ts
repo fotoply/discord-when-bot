@@ -3,7 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 // Use same DB path as src/store/db.ts when running under VITEST
-const dbPath = path.join(process.cwd(), 'test-data', `when.test.${process.pid}.db`);
+const dbPath = path.join(
+  process.cwd(),
+  'test-data',
+  `when.test.${process.env.VITEST_WORKER_ID ?? process.pid}.db`,
+);
 
 describe('store/db basic', () => {
   it('exports db and creates tables', async () => {

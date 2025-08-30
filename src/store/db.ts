@@ -8,7 +8,12 @@ const defaultPath =
   process.env.WHEN_DB_PATH ||
   (process.env.VITEST
     ? // Use a process-unique test DB path when running tests to avoid shared file locks
-      path.join(process.cwd(), "test-data", `when.test.${process.pid}.db`)
+      path.join(
+        process.cwd(),
+        "test-data",
+        // Use VITEST_WORKER_ID when available to ensure each test worker uses a distinct DB file.
+        `when.test.${process.env.VITEST_WORKER_ID ?? process.pid}.db`,
+      )
     : path.join(process.cwd(), "data", "when.db"));
 
 const dir = path.dirname(defaultPath);
