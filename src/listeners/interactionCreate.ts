@@ -320,12 +320,24 @@ export default class InteractionCreateListener extends Listener<
       return;
     }
 
+    // Only the poll creator or a guild admin may close the poll
     if (interaction.user.id !== poll.creatorId) {
-      await interaction.reply({
-        content: "Only the poll creator can close this poll.",
-        ephemeral: true,
-      });
-      return;
+      // Allow users with Administrator permission to close as well
+      const member = (interaction as any).member;
+      const isAdmin = !!(
+        member &&
+        member.permissions &&
+        typeof member.permissions.has === 'function' &&
+        // permissions.has may accept a string or numeric flag; tests will mock it
+        member.permissions.has('Administrator')
+      );
+      if (!isAdmin) {
+        await interaction.reply({
+          content: "Only the poll creator can close this poll.",
+          ephemeral: true,
+        });
+        return;
+      }
     }
 
     if (poll.closed) {
@@ -338,7 +350,7 @@ export default class InteractionCreateListener extends Listener<
 
     Polls.close(poll.id);
 
-    const updated = Polls.get(poll.id)!;
+    const updated = Polls.get(poll.id)!
 
     await interaction.update({
       content: renderPollContent(updated),

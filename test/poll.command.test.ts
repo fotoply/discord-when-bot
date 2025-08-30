@@ -189,4 +189,94 @@ describe('Poll command', () => {
     expect(updated.messageId).toBe('new-closed');
     expect(updated.channelId).toBe('dest-closed');
   });
+
+  it('registerApplicationCommands when GUILD_ID not set passes undefined guild option', async () => {
+    const PollCmd = await import('../src/commands/poll.js');
+    const PollCommandClass = PollCmd.default;
+
+    const prev = process.env.GUILD_ID;
+    delete process.env.GUILD_ID;
+
+    let receivedGuildOpt: any = 'unset';
+    const mockBuilder: any = {
+      setName(n: string) { return this; },
+      setDescription(d: string) { return this; },
+      addSubcommand(fn: Function) { const sub: any = { setName: () => sub, setDescription: () => sub, addStringOption: () => sub, addChannelOption: () => sub }; fn(sub); return this; },
+    };
+
+    const registry: any = {
+      registerChatInputCommand: (fn: Function, guildOpt?: any) => { fn(mockBuilder); receivedGuildOpt = guildOpt; return undefined; },
+    };
+
+    await PollCommandClass.prototype.registerApplicationCommands.call({ name: 'poll', description: 'd' } as any, registry as any);
+
+    expect(receivedGuildOpt).toBeUndefined();
+
+    if (prev === undefined) delete process.env.GUILD_ID; else process.env.GUILD_ID = prev;
+  });
+
+  it('repost continues when channels.fetch throws and still posts', async () => {
+    const poll = Polls.createPoll({ channelId: 'old-chan-throw', creatorId: 'creatorThrow', dates: ['2025-08-30'] });
+    Polls.setMessageId(poll.id, 'old-msg-throw');
+
+    const channelsFetch = vi.fn().mockImplementation(() => { throw new Error('fetch failed'); });
+
+    const newMsg = { id: 'new-after-throw' };
+    const destChannel = { id: 'dest-throw', isTextBased: () => true, send: vi.fn().mockResolvedValue(newMsg) };
+
+    const fakeCmd: any = { container: { client: { channels: { fetch: channelsFetch } } } };
+
+    const interaction: any = {
+      options: {
+        getSubcommand: () => 'repost',
+        getString: (k: string) => poll.id,
+        getChannel: () => destChannel,
+      },
+      user: { id: 'creatorThrow' },
+      reply: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await PollCommand.prototype.chatInputRun.call(fakeCmd, interaction as any);
+
+    expect(channelsFetch).toHaveBeenCalledWith('old-chan-throw');
+    expect(destChannel.send).toHaveBeenCalled();
+    const updated = Polls.get(poll.id)!;
+    expect(updated.messageId).toBe('new-after-throw');
+    expect(updated.channelId).toBe('dest-throw');
+  });
+
+  it('repost continues when oldMsg.delete rejects', async () => {
+    const poll = Polls.createPoll({ channelId: 'old-chan-delerr', creatorId: 'creatorDelErr', dates: ['2025-08-30'] });
+    Polls.setMessageId(poll.id, 'old-msg-delerr');
+
+    const oldMsg = { delete: vi.fn().mockRejectedValue(new Error('delete failed')) };
+    const oldChannel = { isTextBased: () => true, messages: { fetch: vi.fn().mockResolvedValue(oldMsg) } };
+    const channelsFetch = vi.fn().mockResolvedValue(oldChannel);
+
+    const newMsg = { id: 'new-after-delerr' };
+    const destChannel = { id: 'dest-delerr', isTextBased: () => true, send: vi.fn().mockResolvedValue(newMsg) };
+
+    const fakeCmd: any = { container: { client: { channels: { fetch: channelsFetch } } } };
+
+    const interaction: any = {
+      options: {
+        getSubcommand: () => 'repost',
+        getString: (k: string) => poll.id,
+        getChannel: () => destChannel,
+      },
+      user: { id: 'creatorDelErr' },
+      reply: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await PollCommand.prototype.chatInputRun.call(fakeCmd, interaction as any);
+
+    expect(channelsFetch).toHaveBeenCalledWith('old-chan-delerr');
+    expect(oldChannel.messages.fetch).toHaveBeenCalledWith('old-msg-delerr');
+    expect(oldMsg.delete).toHaveBeenCalled();
+
+    expect(destChannel.send).toHaveBeenCalled();
+    const updated = Polls.get(poll.id)!;
+    expect(updated.messageId).toBe('new-after-delerr');
+    expect(updated.channelId).toBe('dest-delerr');
+  });
 });

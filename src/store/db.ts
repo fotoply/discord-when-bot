@@ -7,7 +7,8 @@ import Database from "better-sqlite3";
 const defaultPath =
   process.env.WHEN_DB_PATH ||
   (process.env.VITEST
-    ? path.join(process.cwd(), "test-data", "when.test.db")
+    ? // Use a process-unique test DB path when running tests to avoid shared file locks
+      path.join(process.cwd(), "test-data", `when.test.${process.pid}.db`)
     : path.join(process.cwd(), "data", "when.db"));
 
 const dir = path.dirname(defaultPath);

@@ -48,4 +48,55 @@ describe('Ready listener boot-time checks', () => {
     logSpy.mockRestore();
     errorSpy.mockRestore();
   });
+
+  it('closes a poll when channels.fetch returns null (channel gone)', async () => {
+    const client = {
+      channels: {
+        fetch: vi.fn().mockResolvedValue(null),
+      },
+    } as any;
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await ReadyListener.prototype.run.call({}, client);
+
+    const pollsMod = await import('../src/store/polls.js');
+    expect(pollsMod.Polls.close).toHaveBeenCalledWith('poll-deleted-1');
+
+    logSpy.mockRestore();
+  });
+
+  it('closes a poll when messages.fetch rejects with Unknown Channel (status 10003)', async () => {
+    const client = {
+      channels: {
+        fetch: vi.fn().mockResolvedValue({ messages: { fetch: vi.fn().mockRejectedValue({ status: 10003 }) } }),
+      },
+    } as any;
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await ReadyListener.prototype.run.call({}, client);
+
+    const pollsMod = await import('../src/store/polls.js');
+    expect(pollsMod.Polls.close).toHaveBeenCalledWith('poll-deleted-1');
+
+    logSpy.mockRestore();
+  });
+
+  it('closes a poll when messages.fetch rejects with Error containing Unknown Channel', async () => {
+    const client = {
+      channels: {
+        fetch: vi.fn().mockResolvedValue({ messages: { fetch: vi.fn().mockRejectedValue(new Error('Unknown Channel')) } }),
+      },
+    } as any;
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await ReadyListener.prototype.run.call({}, client);
+
+    const pollsMod = await import('../src/store/polls.js');
+    expect(pollsMod.Polls.close).toHaveBeenCalledWith('poll-deleted-1');
+
+    logSpy.mockRestore();
+  });
 });
