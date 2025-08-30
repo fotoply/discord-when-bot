@@ -119,4 +119,27 @@ describe('Ready listener', () => {
 
     errorSpy.mockRestore();
   });
+
+  it('constructs ReadyListener and leaves poll open when message exists', async () => {
+    const mod = await import('../src/listeners/ready.js');
+    const ReadyListener = mod.default;
+
+    const poll: any = { id: 'p-exists', channelId: 'c1', creatorId: 'uE', messageId: 'm1', closed: false };
+    const pollsMock: any = { allOpen: () => [poll], close: vi.fn() };
+
+    const channel: any = { messages: { fetch: vi.fn().mockResolvedValue({ id: 'm1' }) } };
+    const client: any = { channels: { fetch: vi.fn().mockResolvedValue(channel) } };
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const listener = new ReadyListener({} as any, {} as any);
+    await listener.run(client, pollsMock);
+
+    expect(client.channels.fetch).toHaveBeenCalledWith('c1');
+    expect(channel.messages.fetch).toHaveBeenCalledWith('m1');
+    // ensure we did not close the poll
+    expect(pollsMock.close).not.toHaveBeenCalled();
+
+    logSpy.mockRestore();
+  });
 });

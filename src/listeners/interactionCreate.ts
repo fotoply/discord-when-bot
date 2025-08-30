@@ -1,14 +1,12 @@
 import { Events, Listener } from "@sapphire/framework";
 import {
   ActionRowBuilder,
-  ButtonBuilder,
   ButtonInteraction,
-  ButtonStyle,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
   type Interaction,
 } from "discord.js";
-import { Polls, type Poll, NONE_SELECTION } from "../store/polls.js";
+import { Polls } from "../store/polls.js";
 import { Sessions } from "../store/sessions.js";
 import {
   buildDateRange,

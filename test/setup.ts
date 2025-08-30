@@ -37,8 +37,3 @@ const testDbPath = path.join(
   `when.test.${workerId ?? process.pid}.db`,
 );
 process.env.WHEN_DB_PATH = process.env.WHEN_DB_PATH || testDbPath;
-
-// Export a helper to restore original exit if needed
-export function restoreProcessExit() {
-  Object.defineProperty(process, 'exit', { value: originalExit });
-}
