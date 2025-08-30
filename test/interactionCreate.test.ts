@@ -174,6 +174,17 @@ describe('InteractionCreate listener', () => {
 
     await listener.run(interaction);
 
+    expect(replySpy).toHaveBeenCalled();
+    expect(fetchReply).toHaveBeenCalled();
+    expect(followUp).toHaveBeenCalled();
+
+    // A poll should have been created and have its messageId set
+    const polls = Array.from(Polls['polls'].values() as any) as any[];
+    const found = polls.find((p) => p.creatorId === 'modal-user');
+    expect(found).toBeTruthy();
+    expect(found.messageId).toBe('created-msg');
+  });
+
   it('handleClose rejects non-creator non-admin from closing the poll', async () => {
     const poll = Polls.createPoll({ channelId: 'c-close-nonadmin', creatorId: 'creatorNA', dates: ['2025-08-30'] });
 
@@ -192,17 +203,6 @@ describe('InteractionCreate listener', () => {
     // should have replied with permission error and not closed the poll
     expect(nonAdminInteraction.reply).toHaveBeenCalled();
     expect(Polls.isClosed(poll.id)).toBe(false);
-  });
-
-    expect(replySpy).toHaveBeenCalled();
-    expect(fetchReply).toHaveBeenCalled();
-    expect(followUp).toHaveBeenCalled();
-
-    // A poll should have been created and have its messageId set
-    const polls = Array.from(Polls['polls'].values() as any) as any[];
-    const found = polls.find((p) => p.creatorId === 'modal-user');
-    expect(found).toBeTruthy();
-    expect(found.messageId).toBe('created-msg');
   });
 
   it('handleDateRangeModal rejects invalid ISO dates', async () => {

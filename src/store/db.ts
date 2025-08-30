@@ -19,6 +19,8 @@ export const db = new Database(defaultPath);
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
+// If DB file is temporarily locked, wait up to 5 seconds before failing to reduce SQLITE_BUSY races
+db.pragma("busy_timeout = 5000");
 db.exec(`
     CREATE TABLE IF NOT EXISTS polls
     (
