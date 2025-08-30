@@ -4,10 +4,10 @@ import Database from "better-sqlite3";
 
 // Use WHEN_DB_PATH if provided; otherwise default to the production DB path under data/
 const defaultPath =
-  process.env.WHEN_DB_PATH || path.join(process.cwd(), "data", "when.db");
+    process.env.WHEN_DB_PATH || path.join(process.cwd(), "data", "when.db");
 
 const dir = path.dirname(defaultPath);
-if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+if (!fs.existsSync(dir)) fs.mkdirSync(dir, {recursive: true});
 
 export const db = new Database(defaultPath);
 
