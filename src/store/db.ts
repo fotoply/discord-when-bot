@@ -2,19 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 
-// Use a real sqlite file for tests to validate SQL statements. Put test DBs
-// under test-data/ so they are isolated and ignored by git.
+// Use WHEN_DB_PATH if provided; otherwise default to the production DB path under data/
 const defaultPath =
-  process.env.WHEN_DB_PATH ||
-  (process.env.VITEST
-    ? // Use a process-unique test DB path when running tests to avoid shared file locks
-      path.join(
-        process.cwd(),
-        "test-data",
-        // Use VITEST_WORKER_ID when available to ensure each test worker uses a distinct DB file.
-        `when.test.${process.env.VITEST_WORKER_ID ?? process.pid}.db`,
-      )
-    : path.join(process.cwd(), "data", "when.db"));
+  process.env.WHEN_DB_PATH || path.join(process.cwd(), "data", "when.db");
 
 const dir = path.dirname(defaultPath);
 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });

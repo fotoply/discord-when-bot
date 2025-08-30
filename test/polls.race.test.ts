@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
-import path from 'node:path';
 
-const dbPath = path.join(process.cwd(), 'test-data', `when.test.${process.pid}.db`);
+const dbPath = process.env.WHEN_DB_PATH as string;
 
 beforeEach(() => {
   try { if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath); } catch {}
@@ -43,4 +42,3 @@ describe('Polls concurrency (race) tests', () => {
     try { if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath); } catch {}
   });
 });
-

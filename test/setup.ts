@@ -10,8 +10,17 @@ Object.defineProperty(process, 'exit', {
   },
 });
 
+// Ensure each test worker uses an isolated sqlite database file
+import path from 'node:path';
+const workerId = process.env.VITEST_WORKER_ID; // provided by Vitest when using threads
+const testDbPath = path.join(
+  process.cwd(),
+  'test-data',
+  `when.test.${workerId ?? process.pid}.db`,
+);
+process.env.WHEN_DB_PATH = process.env.WHEN_DB_PATH || testDbPath;
+
 // Export a helper to restore original exit if needed
 export function restoreProcessExit() {
   Object.defineProperty(process, 'exit', { value: originalExit });
 }
-

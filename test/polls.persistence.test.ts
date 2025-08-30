@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
-import path from 'node:path';
 
-const dbPath = path.join(process.cwd(), 'test-data', `when.test.${process.pid}.db`);
+const dbPath = process.env.WHEN_DB_PATH as string;
 
 beforeEach(() => {
   // Remove any existing test DB so we start fresh
@@ -55,4 +54,3 @@ describe('Poll persistence', () => {
     expect(Polls3.isClosed(poll.id)).toBe(true);
   });
 });
-

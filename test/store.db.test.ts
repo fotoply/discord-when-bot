@@ -1,13 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
-import path from 'node:path';
 
-// Use same DB path as src/store/db.ts when running under VITEST
-const dbPath = path.join(
-  process.cwd(),
-  'test-data',
-  `when.test.${process.env.VITEST_WORKER_ID ?? process.pid}.db`,
-);
+// Use DB path from test setup (set via WHEN_DB_PATH)
+const dbPath = process.env.WHEN_DB_PATH as string;
 
 describe('store/db basic', () => {
   it('exports db and creates tables', async () => {
