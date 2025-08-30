@@ -16,7 +16,10 @@
     "typecheck": "tsc -p . --noEmit",
     "smoke:create": "tsx scripts/persist-create.ts",
     "smoke:load": "tsx scripts/persist-load.ts",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@sapphire/decorators": "latest",
@@ -28,8 +31,11 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.14.12",
+    "@vitest/coverage-v8": "^1.6.1",
+    "c8": "^10.1.3",
     "prettier": "^3.6.2",
     "tsx": "^4.16.2",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "vitest": "^1.6.1"
   }
 }

@@ -17,6 +17,17 @@ import {
   isValidISODate,
 } from "../util/date.js";
 
+// Type guards for narrowing Interaction to specific interaction types
+function isModalSubmitInteraction(i: Interaction): i is import('discord.js').ModalSubmitInteraction {
+  return typeof (i as any).isModalSubmit === 'function' && (i as any).isModalSubmit();
+}
+function isButtonInteraction(i: Interaction): i is ButtonInteraction {
+  return typeof (i as any).isButton === 'function' && (i as any).isButton();
+}
+function isStringSelectInteraction(i: Interaction): i is StringSelectMenuInteraction {
+  return typeof (i as any).isStringSelectMenu === 'function' && (i as any).isStringSelectMenu();
+}
+
 export default class InteractionCreateListener extends Listener<
   typeof Events.InteractionCreate
 > {
@@ -28,15 +39,13 @@ export default class InteractionCreateListener extends Listener<
   }
 
   public async run(interaction: Interaction) {
-    if (
-      interaction.isModalSubmit() &&
-      interaction.customId === "when:date-range"
-    ) {
+    // Use type guard functions to narrow the interaction type for TypeScript
+    if (isModalSubmitInteraction(interaction) && interaction.customId === "when:date-range") {
       await this.handleDateRangeModal(interaction);
       return;
     }
 
-    if (interaction.isButton()) {
+    if (isButtonInteraction(interaction)) {
       if (interaction.customId.startsWith("when:toggle:")) {
         await this.handleToggle(interaction);
         return;
@@ -51,18 +60,11 @@ export default class InteractionCreateListener extends Listener<
       }
     }
 
-    if (
-      interaction.isStringSelectMenu() &&
-      interaction.customId === "when:first"
-    ) {
+    if (isStringSelectInteraction(interaction) && interaction.customId === "when:first") {
       await this.handleFirstSelect(interaction);
       return;
     }
-
-    if (
-      interaction.isStringSelectMenu() &&
-      interaction.customId === "when:last"
-    ) {
+    if (isStringSelectInteraction(interaction) && interaction.customId === "when:last") {
       await this.handleLastSelect(interaction);
       return;
     }

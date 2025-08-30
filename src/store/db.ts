@@ -2,8 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 
+// Use a real sqlite file for tests to validate SQL statements. Put test DBs
+// under test-data/ so they are isolated and ignored by git.
 const defaultPath =
-  process.env.WHEN_DB_PATH || path.join(process.cwd(), "data", "when.db");
+  process.env.WHEN_DB_PATH ||
+  (process.env.VITEST
+    ? path.join(process.cwd(), "test-data", "when.test.db")
+    : path.join(process.cwd(), "data", "when.db"));
+
 const dir = path.dirname(defaultPath);
 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
