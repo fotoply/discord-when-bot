@@ -106,6 +106,20 @@ class PollStore {
     }
   }
 
+  // Update both the channel and message for a poll (used when reposting)
+  setMessageIdAndChannel(pollId: string, channelId: string, messageId: string) {
+    const poll = this.polls.get(pollId) ?? this.hydrate(pollId);
+    if (poll) {
+      poll.messageId = messageId;
+      poll.channelId = channelId;
+      db.prepare("UPDATE polls SET message_id = ?, channel_id = ? WHERE id = ?").run(
+        messageId,
+        channelId,
+        pollId,
+      );
+    }
+  }
+
   get(pollId: string) {
     return this.polls.get(pollId) ?? this.hydrate(pollId);
   }
