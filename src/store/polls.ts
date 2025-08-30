@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { db } from "./db.js";
 
+export const NONE_SELECTION = "__none__";
+
 export type Poll = {
   id: string;
   channelId: string;
   creatorId: string;
   messageId?: string;
-  dates: string[]; // YYYY-MM-DD
+  dates: string[]; // YYYY-MM-DD or NONE_SELECTION
   selections: Map<string, Set<string>>; // date -> users
   closed?: boolean;
 };
@@ -66,11 +68,13 @@ class PollStore {
     const id = randomUUID().slice(0, 12);
     const selections = new Map<string, Set<string>>();
     for (const d of input.dates) selections.set(d, new Set());
+    // Ensure the 'none' option exists for this poll
+    selections.set(NONE_SELECTION, new Set());
     const poll: Poll = {
       id,
       channelId: input.channelId,
       creatorId: input.creatorId,
-      dates: [...input.dates],
+      dates: [...input.dates, NONE_SELECTION],
       selections,
       closed: false,
     };
@@ -83,6 +87,8 @@ class PollStore {
         "INSERT INTO poll_dates (poll_id, date) VALUES (?, ?)",
       );
       for (const d of input.dates) stmt.run(id, d);
+      // persist special none option
+      stmt.run(id, NONE_SELECTION);
     });
     trx();
     this.polls.set(id, poll);
@@ -113,29 +119,59 @@ class PollStore {
     if (!poll || poll.closed) return null;
     if (!poll.selections.has(date)) return null;
     const set = poll.selections.get(date)!;
-    if (set.has(userId)) {
-      // remove
-      db.prepare(
-        "DELETE FROM poll_votes WHERE poll_id = ? AND date = ? AND user_id = ?",
-      ).run(pollId, date, userId);
-      set.delete(userId);
-      return { selected: false, count: set.size };
-    } else {
-      // add
-      db.prepare(
-        "INSERT OR IGNORE INTO poll_votes (poll_id, date, user_id) VALUES (?, ?, ?)",
-      ).run(pollId, date, userId);
-      set.add(userId);
-      return { selected: true, count: set.size };
-    }
+
+    // Use a transaction because toggling 'none' must clear other selections and vice-versa
+    const addStmt = db.prepare(
+      "INSERT OR IGNORE INTO poll_votes (poll_id, date, user_id) VALUES (?, ?, ?)",
+    );
+    const delStmt = db.prepare(
+      "DELETE FROM poll_votes WHERE poll_id = ? AND date = ? AND user_id = ?",
+    );
+
+    const trx = db.transaction(() => {
+      if (set.has(userId)) {
+        // remove current selection
+        delStmt.run(pollId, date, userId);
+        set.delete(userId);
+      } else {
+        // add selection
+        addStmt.run(pollId, date, userId);
+        set.add(userId);
+
+        if (date === NONE_SELECTION) {
+          // If user selected 'none', remove them from all other dates
+          for (const d of poll.dates) {
+            if (d === NONE_SELECTION) continue;
+            const s = poll.selections.get(d);
+            if (s && s.has(userId)) {
+              delStmt.run(pollId, d, userId);
+              s.delete(userId);
+            }
+          }
+        } else {
+          // If user selected a real date, ensure 'none' is deselected for them
+          const noneSet = poll.selections.get(NONE_SELECTION);
+          if (noneSet && noneSet.has(userId)) {
+            delStmt.run(pollId, NONE_SELECTION, userId);
+            noneSet.delete(userId);
+          }
+        }
+      }
+    });
+
+    trx();
+
+    return { selected: set.has(userId), count: set.size };
   }
 
   toggleAll(pollId: string, userId: string): { allSelected: boolean } | null {
     const poll = this.polls.get(pollId) ?? this.hydrate(pollId);
     if (!poll || poll.closed) return null;
-    // Determine if user currently has all dates selected
+    // Consider only real dates (exclude NONE_SELECTION)
+    const realDates = poll.dates.filter((d) => d !== NONE_SELECTION);
+    // Determine if user currently has all real dates selected
     let hasAll = true;
-    for (const d of poll.dates) {
+    for (const d of realDates) {
       const set = poll.selections.get(d)!;
       if (!set.has(userId)) {
         hasAll = false;
@@ -150,14 +186,23 @@ class PollStore {
       "DELETE FROM poll_votes WHERE poll_id = ? AND date = ? AND user_id = ?",
     );
     const trx = db.transaction(() => {
-      for (const d of poll.dates) {
-        const set = poll.selections.get(d)!;
-        if (hasAll) {
+      if (hasAll) {
+        for (const d of realDates) {
+          const set = poll.selections.get(d)!;
           delStmt.run(poll.id, d, userId);
           set.delete(userId);
-        } else {
+        }
+      } else {
+        for (const d of realDates) {
+          const set = poll.selections.get(d)!;
           addStmt.run(poll.id, d, userId);
           set.add(userId);
+        }
+        // Ensure 'none' is removed
+        const noneSet = poll.selections.get(NONE_SELECTION);
+        if (noneSet && noneSet.has(userId)) {
+          delStmt.run(poll.id, NONE_SELECTION, userId);
+          noneSet.delete(userId);
         }
       }
     });
