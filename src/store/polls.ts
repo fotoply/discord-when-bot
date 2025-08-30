@@ -229,6 +229,17 @@ class PollStore {
   isClosed(pollId: string): boolean {
     return (this.polls.get(pollId) ?? this.hydrate(pollId))?.closed === true;
   }
+
+  // Return all open polls (hydrated)
+  allOpen(): Poll[] {
+    const rows = db.prepare("SELECT id FROM polls WHERE closed = 0").all() as { id: string }[];
+    const out: Poll[] = [];
+    for (const r of rows) {
+      const p = this.get(r.id);
+      if (p) out.push(p);
+    }
+    return out;
+  }
 }
 
 export const Polls = new PollStore();

@@ -17,7 +17,7 @@
     "smoke:create": "tsx scripts/persist-create.ts",
     "smoke:load": "tsx scripts/persist-load.ts",
     "format": "prettier --write .",
-    "test": "vitest",
+    "test": "vitest run",
     "test:watch": "vitest --watch",
     "coverage": "vitest run --coverage"
   },
