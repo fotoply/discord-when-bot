@@ -12,9 +12,10 @@ describe('src/index entrypoint', () => {
     delete process.env.DISCORD_TOKEN;
 
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {});
+    // use a noop cast to any to satisfy TS which expects a function returning 'never'
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((() => {}) as any));
 
-    // Import the entry which should observe missing token and call process.exit
+    // Import the entry which should observe the missing token and call process.exit
     await import('../src/index.js');
 
     expect(errSpy).toHaveBeenCalledWith('Missing DISCORD_TOKEN in environment');
@@ -52,7 +53,8 @@ describe('src/index entrypoint', () => {
     process.env.DISCORD_TOKEN = 'bad-token';
 
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {});
+    // cast noop to any again to avoid TS error
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((() => {}) as any));
 
     vi.doMock('@sapphire/framework', () => ({
       SapphireClient: function (_opts: any) {
