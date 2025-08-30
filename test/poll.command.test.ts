@@ -1,0 +1,192 @@
+// Ensure framework decorators and Command base are mocked before importing the command module
+import { describe, it, expect, vi } from 'vitest';
+vi.mock('@sapphire/decorators', () => ({ ApplyOptions: (_opts: any) => (target: any) => target }));
+vi.mock('@sapphire/framework', () => ({ Command: class Command {} }));
+
+import PollCommand from '../src/commands/poll.js';
+import { Polls } from '../src/store/polls.js';
+
+describe('Poll command', () => {
+  it('/poll list shows open polls', async () => {
+    const poll = Polls.createPoll({ channelId: 'chan-list', creatorId: 'creatorL', dates: ['2025-08-30'] });
+
+    const fakeCmd: any = {}; // no container needed for list
+
+    const interaction: any = {
+      options: {
+        getSubcommand: () => 'list',
+      },
+      reply: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await PollCommand.prototype.chatInputRun.call(fakeCmd, interaction as any);
+
+    expect(interaction.reply).toHaveBeenCalled();
+    const arg = interaction.reply.mock.calls[0][0];
+    expect(arg.content).toContain(poll.id);
+  });
+
+  it('/poll repost rejects non-creator', async () => {
+    const poll = Polls.createPoll({ channelId: 'chan-re', creatorId: 'creatorR', dates: ['2025-08-30'] });
+
+    const fakeCmd: any = {};
+
+    const interaction: any = {
+      options: {
+        getSubcommand: () => 'repost',
+        getString: (k: string) => poll.id,
+        getChannel: () => null,
+      },
+      user: { id: 'not-the-creator' },
+      reply: vi.fn().mockResolvedValue(undefined),
+      channel: null,
+    };
+
+    await PollCommand.prototype.chatInputRun.call(fakeCmd, interaction as any);
+
+    expect(interaction.reply).toHaveBeenCalled();
+    const arg = interaction.reply.mock.calls[0][0];
+    expect(arg.content).toMatch(/Only the poll creator/);
+  });
+
+  it('/poll repost deletes old message and posts in target channel', async () => {
+    const poll = Polls.createPoll({ channelId: 'old-chan', creatorId: 'creatorP', dates: ['2025-08-30'] });
+    // set an existing message id to be deleted
+    Polls.setMessageId(poll.id, 'old-msg');
+
+    // mock client channels.fetch to return old channel with messages.fetch -> oldMsg
+    const oldMsg = { delete: vi.fn().mockResolvedValue(undefined) };
+    const oldChannel = { isTextBased: () => true, messages: { fetch: vi.fn().mockResolvedValue(oldMsg) } };
+    const channelsFetch = vi.fn().mockResolvedValue(oldChannel);
+
+    // destination channel which will receive the new message
+    const newMsg = { id: 'new-msg' };
+    const destChannel = { id: 'dest-chan', isTextBased: () => true, send: vi.fn().mockResolvedValue(newMsg) };
+
+    const fakeCmd: any = { container: { client: { channels: { fetch: channelsFetch } } } };
+
+    const interaction: any = {
+      options: {
+        getSubcommand: () => 'repost',
+        getString: (k: string) => poll.id,
+        getChannel: () => destChannel,
+      },
+      user: { id: 'creatorP' },
+      reply: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await PollCommand.prototype.chatInputRun.call(fakeCmd, interaction as any);
+
+    // old message should have been fetched and deleted
+    expect(channelsFetch).toHaveBeenCalledWith('old-chan');
+    expect(oldChannel.messages.fetch).toHaveBeenCalledWith('old-msg');
+    expect(oldMsg.delete).toHaveBeenCalled();
+
+    // new message should be sent to destination channel
+    expect(destChannel.send).toHaveBeenCalled();
+
+    // Polls store should have updated messageId and channelId
+    const updated = Polls.get(poll.id)!;
+    expect(updated.messageId).toBe('new-msg');
+    expect(updated.channelId).toBe('dest-chan');
+
+    const replyArg = interaction.reply.mock.calls[0][0];
+    expect(replyArg.content).toContain(poll.id);
+  });
+
+  it('/poll repost when no previous message exists posts and updates', async () => {
+    const poll = Polls.createPoll({ channelId: 'oldless-chan', creatorId: 'creatorN', dates: ['2025-08-30'] });
+    // ensure no message id is set
+
+    const channelsFetch = vi.fn();
+    const newMsg = { id: 'new-no-old' };
+    const destChannel = { id: 'dest-no-old', isTextBased: () => true, send: vi.fn().mockResolvedValue(newMsg) };
+
+    const fakeCmd: any = { container: { client: { channels: { fetch: channelsFetch } } } };
+
+    const interaction: any = {
+      options: {
+        getSubcommand: () => 'repost',
+        getString: (k: string) => poll.id,
+        getChannel: () => destChannel,
+      },
+      user: { id: 'creatorN' },
+      reply: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await PollCommand.prototype.chatInputRun.call(fakeCmd, interaction as any);
+
+    // channels.fetch should not have been called because there was no previous message
+    expect(channelsFetch).not.toHaveBeenCalled();
+
+    expect(destChannel.send).toHaveBeenCalled();
+    const updated = Polls.get(poll.id)!;
+    expect(updated.messageId).toBe('new-no-old');
+    expect(updated.channelId).toBe('dest-no-old');
+  });
+
+  it('/poll repost with no channel option posts into current channel', async () => {
+    const poll = Polls.createPoll({ channelId: 'chan-current', creatorId: 'creatorC', dates: ['2025-08-30'] });
+
+    const newMsg = { id: 'new-current' };
+    const currentChannel = { id: 'current-chan', isTextBased: () => true, send: vi.fn().mockResolvedValue(newMsg) };
+
+    const fakeCmd: any = {};
+
+    const interaction: any = {
+      options: {
+        getSubcommand: () => 'repost',
+        getString: (k: string) => poll.id,
+        getChannel: () => null,
+      },
+      user: { id: 'creatorC' },
+      reply: vi.fn().mockResolvedValue(undefined),
+      channel: currentChannel,
+    };
+
+    await PollCommand.prototype.chatInputRun.call(fakeCmd, interaction as any);
+
+    expect(currentChannel.send).toHaveBeenCalled();
+    const updated = Polls.get(poll.id)!;
+    expect(updated.messageId).toBe('new-current');
+    expect(updated.channelId).toBe('current-chan');
+  });
+
+  it('/poll repost of closed poll does not delete original message but still reposts', async () => {
+    const poll = Polls.createPoll({ channelId: 'closed-old-chan', creatorId: 'creatorZ', dates: ['2025-08-30'] });
+    Polls.setMessageId(poll.id, 'old-closed-msg');
+    Polls.close(poll.id);
+
+    const oldMsg = { delete: vi.fn().mockResolvedValue(undefined) };
+    const oldChannel = { isTextBased: () => true, messages: { fetch: vi.fn().mockResolvedValue(oldMsg) } };
+    const channelsFetch = vi.fn().mockResolvedValue(oldChannel);
+
+    const newMsg = { id: 'new-closed' };
+    const destChannel = { id: 'dest-closed', isTextBased: () => true, send: vi.fn().mockResolvedValue(newMsg) };
+
+    const fakeCmd: any = { container: { client: { channels: { fetch: channelsFetch } } } };
+
+    const interaction: any = {
+      options: {
+        getSubcommand: () => 'repost',
+        getString: (k: string) => poll.id,
+        getChannel: () => destChannel,
+      },
+      user: { id: 'creatorZ' },
+      reply: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await PollCommand.prototype.chatInputRun.call(fakeCmd, interaction as any);
+
+    // Because the poll was closed, the command should not have attempted to delete the old message
+    expect(channelsFetch).not.toHaveBeenCalled();
+    expect(oldChannel.messages.fetch).not.toHaveBeenCalled();
+    expect(oldMsg.delete).not.toHaveBeenCalled();
+
+    // New message still posted and poll updated
+    expect(destChannel.send).toHaveBeenCalled();
+    const updated = Polls.get(poll.id)!;
+    expect(updated.messageId).toBe('new-closed');
+    expect(updated.channelId).toBe('dest-closed');
+  });
+});
