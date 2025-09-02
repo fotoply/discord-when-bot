@@ -1,7 +1,7 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
 // Import production listeners/commands to drive via a small mocked framework router
-import { MockFramework } from './helpers.ts';
+import { MockFramework } from './helpers.js';
 import {Polls} from '../src/store/polls.js';
 import {buildFutureDates} from '../src/util/date.js';
 
