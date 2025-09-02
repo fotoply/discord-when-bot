@@ -6,19 +6,7 @@ import {formatDateLabel} from "./date.js";
 export function componentsFor(poll: Poll): ActionRowBuilder<ButtonBuilder>[] {
     if (poll.closed) return [];
 
-    // Counts and voters
-    const counts: Record<string, number> = {};
-    for (const d of poll.dates) counts[d] = poll.selections.get(d)?.size ?? 0;
-    const votersAll = new Set<string>();
-    const votersReal = new Set<string>();
-    for (const [d, set] of poll.selections) {
-        for (const u of set) {
-            votersAll.add(u);
-            if (d !== NONE_SELECTION) votersReal.add(u);
-        }
-    }
-    const votersCount = votersReal.size; // used for per-date 'all ok' logic
-
+    // Counts and voters no longer needed for button labels
     const rows: ActionRowBuilder<ButtonBuilder>[] = [];
     let current = new ActionRowBuilder<ButtonBuilder>();
 
@@ -27,10 +15,8 @@ export function componentsFor(poll: Poll): ActionRowBuilder<ButtonBuilder>[] {
             rows.push(current);
             current = new ActionRowBuilder<ButtonBuilder>();
         }
-        const count = counts[d] ?? 0;
-        const allOk = d !== NONE_SELECTION && votersCount > 0 && count === votersCount;
-        const labelBase = d === NONE_SELECTION ? `None of these dates (${count})` : `${formatDateLabel(d)} (${count})`;
-        const label = allOk ? `⭐ ${labelBase}` : labelBase;
+        // Button labels should not include counts or stars; keep them concise
+        const label = d === NONE_SELECTION ? `None of these dates` : `${formatDateLabel(d)}`;
         const btn = new ButtonBuilder()
             .setCustomId(`when:toggle:${poll.id}:${d}`)
             .setLabel(label)
@@ -95,4 +81,3 @@ export function renderPollContent(poll: Poll): string {
 
     return lines.join("\n");
 }
-

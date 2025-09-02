@@ -25,7 +25,7 @@ describe('pollRender util', () => {
         expect(labels).toContain('Close poll');
     });
 
-    it('shows star prefix when all voters are available for a date', () => {
+    it('stars appear only in content, not on buttons, when all voters are available for a date', () => {
         const poll = Polls.createPoll({channelId: 'chan-r3', creatorId: 'c3', dates: ['2025-08-30', '2025-08-31']});
         Polls.toggleAll(poll.id, 'u1');
         Polls.toggleAll(poll.id, 'u2');
@@ -33,19 +33,13 @@ describe('pollRender util', () => {
         const rows = componentsFor(poll) as ActionRowBuilder<ButtonBuilder>[];
         const perDateRows = rows.slice(0, Math.max(0, rows.length - 1));
 
-        let foundStar = false;
+        // Ensure no button labels have a star prefix anymore
         for (const r of perDateRows) {
             for (const comp of r.components as ButtonBuilder[]) {
                 const label = (comp as any).data?.label as string | undefined;
-                if (label && label.startsWith('⭐ ')) {
-                    foundStar = true;
-                    break;
-                }
+                expect(label?.startsWith('⭐ ')).toBe(false);
             }
-            if (foundStar) break;
         }
-
-        expect(foundStar).toBe(true);
 
         const content = renderPollContent(poll);
         expect(content).toContain('⭐ ');
