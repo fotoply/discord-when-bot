@@ -45,11 +45,11 @@ export function renderGridPng(matrix: boolean[][], opts: GridImageOptions = {}):
 function renderWithCanvas(matrix: boolean[][], opts: GridImageOptions): { buffer: NodeBuffer; width: number; height: number } {
     const { createCanvas, Image } = CanvasMod as any;
 
-    // scale up defaults (~3x from original)
-    const cellSize = opts.cellSize ?? 66;
-    const cellGap = opts.cellGap ?? 6;
-    const padding = opts.padding ?? 16;
-    const headerHeight = opts.headerHeight ?? 48; // a bit taller for larger header text
+    // scale up defaults by ~50%
+    const cellSize = opts.cellSize ?? 99; // was 66
+    const cellGap = opts.cellGap ?? 9; // was 6
+    const padding = opts.padding ?? 24; // was 16
+    const headerHeight = opts.headerHeight ?? 72; // was 48
     const onColor = opts.onColor ?? '#2ecc71';
     const offColor = opts.offColor ?? '#d2d6db';
     const bgColor = opts.bgColor ?? 'rgba(0,0,0,0)';
@@ -71,7 +71,7 @@ function renderWithCanvas(matrix: boolean[][], opts: GridImageOptions): { buffer
     // Measure row label width dynamically
     const measureCanvas = createCanvas(10, 10);
     const mctx = measureCanvas.getContext('2d');
-    const rowFontSize = 22; // larger row labels
+    const rowFontSize = 33; // was 22
     mctx.font = `bold ${rowFontSize}px ${fontFamily}`;
     let maxLabelWidth = 0;
     const labels = opts.rowLabels ?? [];
@@ -79,11 +79,16 @@ function renderWithCanvas(matrix: boolean[][], opts: GridImageOptions): { buffer
         const w = mctx.measureText((label ?? '').toString().toUpperCase()).width;
         if (w > maxLabelWidth) maxLabelWidth = w;
     }
-    // avatar + gap
-    const avatarSize = Math.min(Math.floor(cellSize * 0.8), 56); // larger avatars
-    const labelGap = 14;
-    const computedRowLabelWidth = (opts.rowLabels && labels.length ? (avatarSize + labelGap + Math.ceil(maxLabelWidth)) : Math.floor(cellSize * 1.8));
-    const rowLabelWidth = opts.rowLabelWidth ?? Math.max(160, computedRowLabelWidth);
+    // compute the width of a single space in current font for trailing gap
+    const spaceWidth = Math.ceil(mctx.measureText(' ').width || rowFontSize * 0.5);
+
+    // avatar + gaps
+    const avatarSize = Math.min(Math.floor(cellSize * 0.8), 84); // cap scaled up from 56
+    const labelGap = 21; // was 14, gap between avatar and text
+    const computedRowLabelWidth = (opts.rowLabels && labels.length
+        ? (avatarSize + labelGap + Math.ceil(maxLabelWidth) + spaceWidth) // add trailing gap roughly one space
+        : Math.floor(cellSize * 1.8));
+    const rowLabelWidth = opts.rowLabelWidth ?? Math.max(240, computedRowLabelWidth); // was 160
 
     const gridW = cols * cellSize + Math.max(0, cols - 1) * cellGap;
     const gridH = rows * cellSize + Math.max(0, rows - 1) * cellGap;
@@ -102,7 +107,7 @@ function renderWithCanvas(matrix: boolean[][], opts: GridImageOptions): { buffer
     }
 
     // Column headers (support multi-line labels like 'Tue\n2/9')
-    const headerFontSize = 20; // larger header
+    const headerFontSize = 30; // was 20
     if ((opts.colHeaders ?? []).length === cols) {
         ctx.fillStyle = '#b4b8bd';
         ctx.textBaseline = 'middle';
@@ -112,7 +117,7 @@ function renderWithCanvas(matrix: boolean[][], opts: GridImageOptions): { buffer
             const lines = raw.split(/\n/);
             const cellX = padding + rowLabelWidth + c * (cellSize + cellGap);
             // compute total text block height
-            const lineHeight = headerFontSize + 2;
+            const lineHeight = headerFontSize + 3;
             const totalH = lineHeight * lines.length;
             const startY = padding + Math.floor((headerHeight - totalH) / 2) + Math.floor(lineHeight / 2);
             for (let i = 0; i < lines.length; i++) {
@@ -194,11 +199,12 @@ function renderWithPngjs(matrix: boolean[][], opts: GridImageOptions): { buffer:
         return { buffer: buf, width: 1, height: 1 };
     }
 
-    const cellSize = opts.cellSize ?? 36;
-    const cellGap = opts.cellGap ?? 4;
-    const padding = opts.padding ?? 12;
-    const headerHeight = opts.headerHeight ?? 24;
-    const rowLabelWidth = opts.rowLabelWidth ?? 160;
+    // scale up defaults by ~50%
+    const cellSize = opts.cellSize ?? 54; // was 36
+    const cellGap = opts.cellGap ?? 6; // was 4
+    const padding = opts.padding ?? 18; // was 12
+    const headerHeight = opts.headerHeight ?? 36; // was 24
+    const rowLabelWidth = opts.rowLabelWidth ?? 240; // was 160
     const on = opts.onColor ?? '#2ecc71';
     const off = opts.offColor ?? '#d2d6db';
 
