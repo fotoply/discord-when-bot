@@ -34,6 +34,18 @@ export default class InteractionCreateListener extends Listener<
         super(context, {...options, event: Events.InteractionCreate});
     }
 
+    private getUserLabelResolver(interaction: any) {
+        return (id: string): string | undefined => {
+            // Prefer guild member display name when available
+            const m = interaction?.guild?.members?.cache?.get?.(id);
+            const display = m?.displayName ?? m?.nickname;
+            if (display) return display;
+            // Fallback to client user cache username
+            const u = interaction?.client?.users?.cache?.get?.(id);
+            return u?.username;
+        };
+    }
+
     public async run(interaction: Interaction) {
         // Use type guard functions to narrow the interaction type for TypeScript
         if (isModalSubmitInteraction(interaction) && interaction.customId === "when:date-range") {
@@ -113,7 +125,7 @@ export default class InteractionCreateListener extends Listener<
             dates,
         });
 
-        const message = buildPollMessage(poll);
+        const message = buildPollMessage(poll, { userLabelResolver: this.getUserLabelResolver(interaction) });
 
         await interaction.reply(message);
 
@@ -216,9 +228,9 @@ export default class InteractionCreateListener extends Listener<
             dates,
         });
 
-        const messageOpts = buildPollMessage(poll);
+        const messageOpts = buildPollMessage(poll, { userLabelResolver: this.getUserLabelResolver(interaction) });
 
-        const message = await interaction.channel.send(messageOpts as any);
+        const message = await (interaction.channel as any).send(messageOpts as any);
 
         Polls.setMessageId(poll.id, message.id);
 
@@ -264,7 +276,7 @@ export default class InteractionCreateListener extends Listener<
 
         const updated = Polls.get(poll.id)!;
 
-        await interaction.update(buildPollMessage(updated) as any);
+        await interaction.update(buildPollMessage(updated, { userLabelResolver: this.getUserLabelResolver(interaction) }) as any);
     }
 
     private async handleToggleAll(interaction: ButtonInteraction) {
@@ -295,7 +307,7 @@ export default class InteractionCreateListener extends Listener<
 
         const updated = Polls.get(poll.id)!;
 
-        await interaction.update(buildPollMessage(updated) as any);
+        await interaction.update(buildPollMessage(updated, { userLabelResolver: this.getUserLabelResolver(interaction) }) as any);
     }
 
     private async handleViewToggle(interaction: ButtonInteraction) {
@@ -314,7 +326,7 @@ export default class InteractionCreateListener extends Listener<
 
         Polls.toggleViewMode(poll.id);
         const updated = Polls.get(poll.id)!;
-        await interaction.update(buildPollMessage(updated) as any);
+        await interaction.update(buildPollMessage(updated, { userLabelResolver: this.getUserLabelResolver(interaction) }) as any);
     }
 
     private async handleClose(interaction: ButtonInteraction) {
