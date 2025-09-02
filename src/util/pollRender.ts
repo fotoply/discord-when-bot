@@ -106,7 +106,7 @@ function tinyWeekday(iso: string) {
     return d.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' }); // Mon, Tue, ...
 }
 
-function fitDisplayLabel(s: string | undefined, maxChars = 15, maxWords = 3): string | undefined {
+export function fitDisplayLabel(s: string | undefined, maxChars = 15, maxWords = 3): string | undefined {
     if (!s) return s;
     const words = s.trim().split(/\s+/);
     let out = '';
