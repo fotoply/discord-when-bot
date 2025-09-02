@@ -203,4 +203,119 @@ describe('Full-flow: start bot, create poll, users vote, and close', () => {
     // Poll should be closed and components removed in the update payload
     expect(Polls.isClosed(poll.id)).toBe(true);
   });
+
+  it('toggle-all selects all real dates then clears them on second click', async () => {
+    // Create a poll via /when
+    await fw.emitSlash('when', { channelId: 'chan-b', userId: 'creatorB' });
+    const future = buildFutureDates(20);
+    const first = future[0]!;
+    const last = future[3]!;
+    await fw.emitSelect('when:first', [first], 'creatorB', 'chan-b');
+    await fw.emitSelect('when:last', [last], 'creatorB', 'chan-b');
+
+    const poll = Polls.allOpen()[0]!;
+
+    // User toggles all
+    const toggleAllId = `when:toggleAll:${poll.id}`;
+    const ix1 = await fw.emitButton(toggleAllId, 'user-all');
+    expect(ix1.update).toHaveBeenCalled();
+
+    const counts1 = Polls.counts(poll.id)!;
+    const realDates = poll.dates.filter((d) => d !== '__none__');
+    for (const d of realDates) expect(counts1[d]).toBe(1);
+
+    // Clicking again clears all
+    const ix2 = await fw.emitButton(toggleAllId, 'user-all');
+    expect(ix2.update).toHaveBeenCalled();
+    const counts2 = Polls.counts(poll.id)!;
+    for (const d of realDates) expect(counts2[d]).toBe(0);
+  });
+
+  it('selecting NONE clears prior real-date selections for that user', async () => {
+    await fw.emitSlash('when', { channelId: 'chan-c', userId: 'creatorC' });
+    const future = buildFutureDates(20);
+    const first = future[0]!;
+    const last = future[2]!;
+    await fw.emitSelect('when:first', [first], 'creatorC', 'chan-c');
+    await fw.emitSelect('when:last', [last], 'creatorC', 'chan-c');
+
+    const poll = Polls.allOpen()[0]!;
+    const realDates = poll.dates.filter((d) => d !== '__none__');
+    const firstReal = realDates[0]!;
+
+    // user-x selects a real date
+    await fw.emitButton(`when:toggle:${poll.id}:${firstReal}`, 'user-x');
+
+    let counts = Polls.counts(poll.id)!;
+    expect(counts[firstReal]).toBe(1);
+
+    // user-x selects NONE
+    await fw.emitButton(`when:toggle:${poll.id}:__none__`, 'user-x');
+
+    counts = Polls.counts(poll.id)!;
+    expect(counts[firstReal]).toBe(0);
+    expect(counts['__none__']).toBe(1);
+  });
+
+  it('non-creator cannot close; admin override can close', async () => {
+    await fw.emitSlash('when', { channelId: 'chan-d', userId: 'creatorD' });
+    const future = buildFutureDates(20);
+    const first = future[0]!;
+    const last = future[1]!;
+    await fw.emitSelect('when:first', [first], 'creatorD', 'chan-d');
+    await fw.emitSelect('when:last', [last], 'creatorD', 'chan-d');
+
+    const poll = Polls.allOpen()[0]!;
+
+    // Non-creator, non-admin attempt
+    const nonCreator = await fw.emitButton(`when:close:${poll.id}`, 'not-creator');
+    expect(nonCreator.reply).toHaveBeenCalled();
+    expect(Polls.isClosed(poll.id)).toBe(false);
+
+    // Admin attempt
+    const adminMember = { permissions: { has: (x: any) => x === 'Administrator' } };
+    const adminIx = await fw.emitButton(`when:close:${poll.id}`, 'some-admin', { member: adminMember });
+    expect(adminIx.update).toHaveBeenCalled();
+    expect(Polls.isClosed(poll.id)).toBe(true);
+  });
+
+  it('rejects invalid last date earlier than first', async () => {
+    await fw.emitSlash('when', { channelId: 'chan-e', userId: 'creatorE' });
+    const future = buildFutureDates(20);
+    const first = future[5]!;
+    const invalidLast = future[2]!; // earlier than first
+
+    const firstIx = await fw.emitSelect('when:first', [first], 'creatorE', 'chan-e');
+    expect(firstIx.update).toHaveBeenCalled();
+
+    const lastIx = await fw.emitSelect('when:last', [invalidLast], 'creatorE', 'chan-e');
+    expect(lastIx.reply).toHaveBeenCalled();
+    const replyArg = lastIx.reply.mock.calls[0][0];
+    expect(replyArg.content).toMatch(/Last date must be the same or after the first date/);
+
+    const chan = fw.getChannel('chan-e');
+    expect(chan.sent.length).toBe(0);
+  });
+
+  it('after closing, attempts to vote reply with closed message', async () => {
+    await fw.emitSlash('when', { channelId: 'chan-f', userId: 'creatorF' });
+    const future = buildFutureDates(20);
+    const first = future[0]!;
+    const last = future[1]!;
+    await fw.emitSelect('when:first', [first], 'creatorF', 'chan-f');
+    await fw.emitSelect('when:last', [last], 'creatorF', 'chan-f');
+
+    const poll = Polls.allOpen()[0]!;
+
+    // Close by creator
+    await fw.emitButton(`when:close:${poll.id}`, poll.creatorId);
+    expect(Polls.isClosed(poll.id)).toBe(true);
+
+    // Try to toggle a date
+    const realDate = poll.dates.find((d) => d !== '__none__')!;
+    const ix = await fw.emitButton(`when:toggle:${poll.id}:${realDate}`, 'voter1');
+    expect(ix.reply).toHaveBeenCalled();
+    const arg = ix.reply.mock.calls[0][0];
+    expect(arg.content).toMatch(/closed/);
+  });
 });
