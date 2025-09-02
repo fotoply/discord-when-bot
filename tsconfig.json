@@ -7,7 +7,9 @@
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": ".",
+    "allowJs": true,
+    "noEmit": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
@@ -16,5 +18,6 @@
     "typeRoots": ["./src/types", "./node_modules/@types"],
     "experimentalDecorators": true
   },
-  "include": ["src"]
+  "include": ["src", "test"],
+  "exclude": ["coverage", "dist", "test-data"]
 }

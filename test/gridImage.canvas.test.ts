@@ -1,102 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { PNG } from 'pngjs';
 import { renderGridPng, __setCanvasModule } from '../src/util/gridImage.js';
-
-function hexToRgba(hex: string): [number, number, number, number] {
-  const h = hex.replace('#', '');
-  const num = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
-  return [(num >> 16) & 255, (num >> 8) & 255, num & 255, 255];
-}
-
-function parseColor(c: string): [number, number, number, number] {
-  if (c.startsWith('#')) return hexToRgba(c);
-  const m = c.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*(\d+(?:\.\d+)?))?\)$/i);
-  if (m) return [parseInt(m[1]!,10), parseInt(m[2]!,10), parseInt(m[3]!,10), Math.round((m[4]?parseFloat(m[4]!):1)*255)];
-  // default white
-  return [255,255,255,255];
-}
-
-function makeFakeCanvasModule() {
-  return {
-    createCanvas(width: number, height: number) {
-      const rects: Array<{x:number,y:number,w:number,h:number,color:string}> = [];
-      let currentFill = '#000000';
-      let currentFont = 'bold 10px sans-serif';
-      let currentBaseline = 'alphabetic';
-      const ctx = {
-        fillStyle: currentFill,
-        font: currentFont,
-        textBaseline: currentBaseline,
-        clearRect: (_x: number, _y: number, _w: number, _h: number) => {},
-        fillRect: (x: number, y: number, w: number, h: number) => {
-          rects.push({ x, y, w, h, color: (ctx as any).fillStyle });
-        },
-        fillText: (_text: string, _x: number, _y: number) => {},
-        measureText: (text: string) => {
-          const m = /\b(\d+)px\b/.exec((ctx as any).font as string);
-          const px = m ? parseInt(m[1]!,10) : 10;
-          const width = Math.ceil(text.length * (px * 0.6));
-          return { width } as any;
-        },
-        beginPath: () => {},
-        arc: (_x: number, _y: number, _r: number, _s: number, _e: number) => {},
-        closePath: () => {},
-        clip: () => {},
-        save: () => {},
-        restore: () => {},
-        drawImage: (_img: any, _x: number, _y: number, _w: number, _h: number) => {},
-        fill: () => {},
-      } as any;
-      Object.defineProperty(ctx, 'fillStyle', {
-        get() { return currentFill; },
-        set(v: any) { currentFill = v; },
-      });
-      Object.defineProperty(ctx, 'font', {
-        get() { return currentFont; },
-        set(v: any) { currentFont = v; },
-      });
-      Object.defineProperty(ctx, 'textBaseline', {
-        get() { return currentBaseline; },
-        set(v: any) { currentBaseline = v; },
-      });
-
-      return {
-        width,
-        height,
-        getContext: (_: string) => ctx,
-        toBuffer: () => {
-          const png = new PNG({ width, height });
-          // transparent base
-          for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-              const idx = (width * y + x) << 2;
-              png.data[idx+0] = 0;
-              png.data[idx+1] = 0;
-              png.data[idx+2] = 0;
-              png.data[idx+3] = 0;
-            }
-          }
-          // draw rects
-          for (const r of rects) {
-            const [rr, gg, bb, aa] = parseColor(r.color);
-            for (let yy = r.y; yy < r.y + r.h; yy++) {
-              for (let xx = r.x; xx < r.x + r.w; xx++) {
-                if (xx < 0 || yy < 0 || xx >= width || yy >= height) continue;
-                const idx = (width * yy + xx) << 2;
-                png.data[idx+0] = rr;
-                png.data[idx+1] = gg;
-                png.data[idx+2] = bb;
-                png.data[idx+3] = aa;
-              }
-            }
-          }
-          return PNG.sync.write(png);
-        },
-      };
-    },
-    Image: class { src: any }
-  };
-}
+import { makeFakeCanvasModule } from './helpers.js';
 
 describe('gridImage renderer (canvas path)', () => {
   let original: any;
@@ -198,7 +103,6 @@ describe('gridImage renderer (canvas path)', () => {
     const matrix = [ [true] ];
     const { buffer } = renderGridPng(matrix, { rowLabels: ['A'], colHeaders: ['Mon\n1/9'], bgColor: '#000000' });
     const png = PNG.sync.read(buffer as any);
-    // Check a pixel inside header area above first cell retains background (text drawing not rasterized in fake ctx)
     // Ensure image was generated successfully with expected dimensions
     expect(png.width).toBeGreaterThan(0);
     expect(png.height).toBeGreaterThan(0);
@@ -224,7 +128,7 @@ describe('gridImage renderer (canvas path)', () => {
 
   it('takes avatar draw branch when rowAvatars are provided', () => {
     const matrix = [ [true] ];
-    const fakePng = Buffer.from([137,80,78,71,13,10,26,10]); // minimal PNG header; our fake canvas doesn\'t parse it but path executes
+    const fakePng = Buffer.from([137,80,78,71,13,10,26,10]);
     const { buffer } = renderGridPng(matrix, { rowLabels: ['A'], rowAvatars: [fakePng] as any, bgColor: '#000000' });
     const png = PNG.sync.read(buffer as any);
     expect(png.width).toBeGreaterThan(0);
