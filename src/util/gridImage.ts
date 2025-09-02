@@ -62,7 +62,7 @@ function renderWithCanvas(matrix: boolean[][], opts: GridImageOptions, CanvasLib
     const colAllTrue: boolean[] = Array.from({ length: cols }, (_, c) =>
         votersRealCount > 0 && matrix.every((row, r) => !rowHasAnyTrue[r] || !!row?.[c])
     );
-    const goldColor = '#fd69de'; // red-ish gold
+    const goldColor = '#FD69DE'; // vibrant pinkish gold for visibility
 
     // Measure row label width dynamically
     const measureCanvas = createCanvas(10, 10);

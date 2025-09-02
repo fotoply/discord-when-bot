@@ -11,7 +11,7 @@ function hexToRgba(hex: string): [number, number, number, number] {
 function parseColor(c: string): [number, number, number, number] {
   if (c.startsWith('#')) return hexToRgba(c);
   const m = c.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*(\d+(?:\.\d+)?))?\)$/i);
-  if (m) return [parseInt(m[1],10), parseInt(m[2],10), parseInt(m[3],10), Math.round((m[4]?parseFloat(m[4]):1)*255)];
+  if (m) return [parseInt(m[1]!,10), parseInt(m[2]!,10), parseInt(m[3]!,10), Math.round((m[4]?parseFloat(m[4]!):1)*255)];
   // default white
   return [255,255,255,255];
 }
@@ -34,7 +34,7 @@ function makeFakeCanvasModule() {
         fillText: (_text: string, _x: number, _y: number) => {},
         measureText: (text: string) => {
           const m = /\b(\d+)px\b/.exec((ctx as any).font as string);
-          const px = m ? parseInt(m[1],10) : 10;
+          const px = m ? parseInt(m[1]!,10) : 10;
           const width = Math.ceil(text.length * (px * 0.6));
           return { width } as any;
         },
@@ -160,7 +160,7 @@ describe('gridImage renderer (canvas path)', () => {
     const xNonGold = padding + rowLabelWidth + 1 * (cellSize + cellGap) + 1;
 
     const idxG = (png.width * y + xGold) << 2;
-    expect([png.data[idxG], png.data[idxG+1], png.data[idxG+2], png.data[idxG+3]]).toEqual([212,175,55,255]);
+    expect([png.data[idxG], png.data[idxG+1], png.data[idxG+2], png.data[idxG+3]]).toEqual([253,105,222,255]);
 
     const idxN = (png.width * y + xNonGold) << 2;
     expect([png.data[idxN], png.data[idxN+1], png.data[idxN+2], png.data[idxN+3]]).toEqual([46,204,113,255]);

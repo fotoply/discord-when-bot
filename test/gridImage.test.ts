@@ -26,7 +26,7 @@ function makeFakeCanvasModule() {
         fillText: (_text: string, _x: number, _y: number) => {},
         measureText: (text: string) => {
           const m = /\b(\d+)px\b/.exec((ctx as any).font as string);
-          const px = m ? parseInt(m[1],10) : 10;
+          const px = m ? parseInt(m[1]!,10) : 10;
           const width = Math.ceil(text.length * (px * 0.6));
           return { width } as any;
         },
@@ -70,15 +70,15 @@ function makeFakeCanvasModule() {
           }
           // draw rects
           for (const r of rects) {
-            const color = r.color;
+            const color = r.color as string;
             let rr = 255, gg = 255, bb = 255, aa = 255;
-            if (typeof color === 'string' && color.startsWith('#')) {
+            if (color?.startsWith('#')) {
               const h = color.slice(1);
               const num = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
               rr = (num >> 16) & 255; gg = (num >> 8) & 255; bb = num & 255; aa = 255;
             } else if (typeof color === 'string') {
               const m = color.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*(\d+(?:\.\d+)?))?\)$/i);
-              if (m) { rr = parseInt(m[1],10); gg = parseInt(m[2],10); bb = parseInt(m[3],10); aa = Math.round((m[4]?parseFloat(m[4]):1)*255); }
+              if (m) { rr = parseInt(m[1]!,10); gg = parseInt(m[2]!,10); bb = parseInt(m[3]!,10); aa = Math.round((m[4]?parseFloat(m[4]!):1)*255); }
             }
             for (let yy = r.y; yy < r.y + r.h; yy++) {
               for (let xx = r.x; xx < r.x + r.w; xx++) {
@@ -128,7 +128,7 @@ describe('gridImage renderer (canvas path suite 2)', () => {
     const rowLabelWidth = Math.max(240, computedRowLabelWidth);
 
     const rows = matrix.length;
-    const cols = matrix[0].length;
+    const cols = matrix[0]!.length;
     const gridW = cols * cellSize + Math.max(0, cols - 1) * cellGap;
     const gridH = rows * cellSize + Math.max(0, rows - 1) * cellGap;
 
@@ -162,8 +162,8 @@ describe('gridImage renderer (canvas path suite 2)', () => {
     const row0y = padding + headerHeight + 0 * (cellSize + cellGap) + 3;
     const [r0, g0, b0, a0] = readPixelRGBA(png, col0x, row0y);
 
-    // gold #D4AF37 => (212,175,55)
-    expect([r0, g0, b0, a0]).toEqual([212, 175, 55, 255]);
+    // gold #FD69DE => (253,105,222)
+    expect([r0, g0, b0, a0]).toEqual([253, 105, 222, 255]);
 
     // pick a pixel inside row 0, col 1 (should NOT be gold)
     const col1x = padding + rowLabelWidth + 1 * (cellSize + cellGap) + 3;
@@ -197,7 +197,7 @@ describe('gridImage renderer (canvas path suite 2)', () => {
     // Column 0: expect gold
     const col0x = padding + rowLabelWidth + 0 * (cellSize + cellGap) + 3;
     const [r0, g0, b0] = readPixelRGBA(png, col0x, row0y);
-    expect([r0, g0, b0]).toEqual([212, 175, 55]);
+    expect([r0, g0, b0]).toEqual([253, 105, 222]);
 
     // Column 1: expect offColor (since matrix[0][1] is false)
     const col1x = padding + rowLabelWidth + 1 * (cellSize + cellGap) + 3;
