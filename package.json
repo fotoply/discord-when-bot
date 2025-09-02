@@ -6,7 +6,10 @@
   "description": "A Discord bot using Sapphire Framework that creates availability polls by date.",
   "license": "MIT",
   "engines": {
-    "node": ">=18.17"
+    "node": ">=20 <21"
+  },
+  "volta": {
+    "node": "20.12.2"
   },
   "type": "module",
   "scripts": {
@@ -25,10 +28,12 @@
     "@sapphire/decorators": "latest",
     "@sapphire/framework": "latest",
     "better-sqlite3": "^9.4.3",
-    "discord-when-bot": "file:",
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.5",
     "pngjs": "^7.0.0"
+  },
+  "optionalDependencies": {
+    "canvas": "^2.11.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

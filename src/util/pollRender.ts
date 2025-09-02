@@ -101,20 +101,44 @@ function tinyDate(iso: string) {
     return `${day}/${m}`; // e.g. 1/9
 }
 
-function firstWord(s: string | undefined): string | undefined {
-    if (!s) return undefined;
-    const m = s.trim().match(/^([^\s]+)/);
-    return m?.[1] ?? s.trim();
+function tinyWeekday(iso: string) {
+    const d = new Date(iso + "T00:00:00Z");
+    return d.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' }); // Mon, Tue, ...
 }
 
-function buildGridImageEmbed(poll: Poll, opts?: { userLabelResolver?: (id: string) => string | undefined }): { embed: EmbedBuilder; file?: { attachment: Buffer; name: string } } {
+function fitDisplayLabel(s: string | undefined, maxChars = 15, maxWords = 3): string | undefined {
+    if (!s) return s;
+    const words = s.trim().split(/\s+/);
+    let out = '';
+    let used = 0;
+    let count = 0;
+    for (const w of words) {
+        const add = (out ? 1 : 0) + w.length; // space + word
+        if (count < maxWords && used + add <= maxChars) {
+            out = out ? out + ' ' + w : w;
+            used += add;
+            count++;
+            continue;
+        }
+        break;
+    }
+    if (!out) out = words[0]?.slice(0, maxChars) ?? '';
+    // hard cap if still too long
+    if (out.length > maxChars) out = out.slice(0, maxChars);
+    return out;
+}
+
+type GridExtras = { userIds?: string[]; rowLabels?: string[]; rowAvatars?: (Buffer | undefined)[]; userLabelResolver?: (id: string) => string | undefined };
+
+function buildGridImageEmbed(poll: Poll, extras?: GridExtras): { embed: EmbedBuilder; file?: { attachment: Buffer; name: string } } {
     // Columns = real dates
     const dates = poll.dates.filter((d) => d !== NONE_SELECTION);
 
     // Rows = users who voted on anything (including NONE_SELECTION)
     const usersSet = new Set<string>();
     for (const [, set] of poll.selections) for (const u of set) usersSet.add(u);
-    const users = [...usersSet].sort();
+    const computedUsers = [...usersSet].sort();
+    const users = extras?.userIds && extras.userIds.length ? extras.userIds : computedUsers;
 
     const title = poll.closed ? `Availability — CLOSED` : `Availability grid`;
     const datesLine = dates.length ? `Dates: ${dates.map(shortDate).join(", ")}` : "Dates: -";
@@ -128,10 +152,12 @@ function buildGridImageEmbed(poll: Poll, opts?: { userLabelResolver?: (id: strin
 
     const embed = new EmbedBuilder().setTitle(title).setDescription(description).setFooter({ text: `Created by @${poll.creatorId}` });
 
-    if (dates.length && users.length) {
-        const colHeaders = dates.map(tinyDate);
-        const rowLabels = users.map((u, i) => firstWord(opts?.userLabelResolver?.(u)) || `#${i + 1}`);
-        const { buffer } = renderGridPng(matrix, { colHeaders, rowLabels, bgColor: [0, 0, 0, 0] });
+    if (dates.length /* && users.length */) {
+        const colHeaders = dates.map((iso) => `${tinyWeekday(iso)}\n${tinyDate(iso)}`);
+        const computedLabels = users.map((u, i) => fitDisplayLabel(extras?.userLabelResolver?.(u)) || `#${i + 1}`);
+        const rowLabels = extras?.rowLabels && extras.rowLabels.length === users.length ? extras.rowLabels : computedLabels;
+        const rowAvatars = extras?.rowAvatars && extras.rowAvatars.length === users.length ? extras.rowAvatars : undefined;
+        const { buffer } = renderGridPng(matrix, { colHeaders, rowLabels, rowAvatars, bgColor: 'rgba(0,0,0,0)' });
         embed.setImage('attachment://grid.png');
         return { embed, file: { attachment: buffer, name: 'grid.png' } };
     }
@@ -139,10 +165,10 @@ function buildGridImageEmbed(poll: Poll, opts?: { userLabelResolver?: (id: strin
     return { embed };
 }
 
-export function buildPollMessage(poll: Poll, opts?: { userLabelResolver?: (id: string) => string | undefined }): { content?: string; embeds?: any[]; components: ActionRowBuilder<ButtonBuilder>[]; files?: any[]; attachments?: any[] } {
+export function buildPollMessage(poll: Poll, extras?: GridExtras): { content?: string; embeds?: any[]; components: ActionRowBuilder<ButtonBuilder>[]; files?: any[]; attachments?: any[] } {
     if (!poll.closed && poll.viewMode === "grid") {
-        const { embed, file } = buildGridImageEmbed(poll, opts);
-        return { content: "", embeds: [embed], components: componentsFor(poll), files: file ? [file] : [] };
+        const { /* embed, */ file } = buildGridImageEmbed(poll, extras);
+        return { content: "", embeds: [], components: componentsFor(poll), files: file ? [file] : [] };
     }
     // default/list or closed -> plain content; explicitly clear embeds and attachments to hide grid
     return {content: renderPollContent(poll), embeds: [], components: poll.closed ? [] : componentsFor(poll), files: [], attachments: []};

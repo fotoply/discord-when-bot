@@ -9,7 +9,7 @@ import {
 import {Polls} from "../store/polls.js";
 import {Sessions} from "../store/sessions.js";
 import {buildDateRange, buildFutureDates, formatDateLabel, isValidISODate,} from "../util/date.js";
-import {componentsFor, renderPollContent, buildPollMessage} from "../util/pollRender.js";
+import { renderPollContent, buildPollMessage} from "../util/pollRender.js";
 
 // Type guards for narrowing Interaction to specific interaction types
 function isModalSubmitInteraction(i: Interaction): i is import('discord.js').ModalSubmitInteraction {
@@ -34,16 +34,60 @@ export default class InteractionCreateListener extends Listener<
         super(context, {...options, event: Events.InteractionCreate});
     }
 
-    private getUserLabelResolver(interaction: any) {
-        return (id: string): string | undefined => {
-            // Prefer guild member display name when available
-            const m = interaction?.guild?.members?.cache?.get?.(id);
-            const display = m?.displayName ?? m?.nickname;
-            if (display) return display;
-            // Fallback to client user cache username
-            const u = interaction?.client?.users?.cache?.get?.(id);
-            return u?.username;
+    private async buildGridExtras(poll: import('../store/polls.js').Poll, interaction: any) {
+        const usersSet = new Set<string>();
+        for (const [, set] of poll.selections) for (const u of set) usersSet.add(u);
+        const userIds = [...usersSet].sort();
+
+        const labelMap = new Map<string, string>();
+        const rowAvatars: (Buffer | undefined)[] = [];
+
+        // Helper to fetch member and user with graceful fallback (cache first, then fetch)
+        const getMember = async (id: string) => {
+            const cached = interaction?.guild?.members?.cache?.get?.(id);
+            if (cached) return cached;
+            try {
+                if (interaction?.guild?.members?.fetch) return await interaction.guild.members.fetch(id);
+            } catch {}
+            return undefined;
         };
+        const getUser = async (id: string) => {
+            const cached = interaction?.client?.users?.cache?.get?.(id);
+            if (cached) return cached;
+            try {
+                if (interaction?.client?.users?.fetch) return await interaction.client.users.fetch(id);
+            } catch {}
+            return undefined;
+        };
+
+        for (const id of userIds) {
+            let label: string | undefined;
+            let avatarBuf: Buffer | undefined;
+
+            const member = await getMember(id);
+            if (member) label = member.displayName ?? member.nickname ?? member.user?.username;
+            if (!label) {
+                const user = await getUser(id);
+                label = (user as any)?.displayName ?? (user as any)?.globalName ?? user?.username;
+            }
+            labelMap.set(id, (label ?? '').trim());
+
+            // avatar fetch (best effort; skip on failure)
+            try {
+                const userObj = member?.user ?? (await getUser(id));
+                const url = userObj?.displayAvatarURL?.({ extension: 'png', size: 128 });
+                if (url && typeof (globalThis as any).fetch === 'function') {
+                    const res = await (globalThis as any).fetch(url);
+                    if (res?.ok) {
+                        const ab = await res.arrayBuffer();
+                        avatarBuf = Buffer.from(ab);
+                    }
+                }
+            } catch {}
+            rowAvatars.push(avatarBuf);
+        }
+
+        return { userIds, rowAvatars, userLabelResolver: (id: string) => labelMap.get(id) };
     }
 
     public async run(interaction: Interaction) {
@@ -125,7 +169,8 @@ export default class InteractionCreateListener extends Listener<
             dates,
         });
 
-        const message = buildPollMessage(poll, { userLabelResolver: this.getUserLabelResolver(interaction) });
+        const extras = await this.buildGridExtras(poll, interaction);
+        const message = buildPollMessage(poll, extras);
 
         await interaction.reply(message);
 
@@ -227,8 +272,8 @@ export default class InteractionCreateListener extends Listener<
             creatorId: interaction.user.id,
             dates,
         });
-
-        const messageOpts = buildPollMessage(poll, { userLabelResolver: this.getUserLabelResolver(interaction) });
+        const extras = await this.buildGridExtras(poll, interaction);
+        const messageOpts = buildPollMessage(poll, extras);
 
         const message = await (interaction.channel as any).send(messageOpts as any);
 
@@ -275,8 +320,8 @@ export default class InteractionCreateListener extends Listener<
         }
 
         const updated = Polls.get(poll.id)!;
-
-        await interaction.update(buildPollMessage(updated, { userLabelResolver: this.getUserLabelResolver(interaction) }) as any);
+        const extras = await this.buildGridExtras(updated, interaction);
+        await interaction.update(buildPollMessage(updated, extras) as any);
     }
 
     private async handleToggleAll(interaction: ButtonInteraction) {
@@ -306,8 +351,8 @@ export default class InteractionCreateListener extends Listener<
         }
 
         const updated = Polls.get(poll.id)!;
-
-        await interaction.update(buildPollMessage(updated, { userLabelResolver: this.getUserLabelResolver(interaction) }) as any);
+        const extras = await this.buildGridExtras(updated, interaction);
+        await interaction.update(buildPollMessage(updated, extras) as any);
     }
 
     private async handleViewToggle(interaction: ButtonInteraction) {
@@ -320,13 +365,17 @@ export default class InteractionCreateListener extends Listener<
             return;
         }
         if (poll.closed) {
-            await interaction.reply({content: "This poll is closed.", ephemeral: true});
+            await interaction.reply({
+                content: "This poll is closed.",
+                ephemeral: true,
+            });
             return;
         }
 
         Polls.toggleViewMode(poll.id);
         const updated = Polls.get(poll.id)!;
-        await interaction.update(buildPollMessage(updated, { userLabelResolver: this.getUserLabelResolver(interaction) }) as any);
+        const extras = await this.buildGridExtras(updated, interaction);
+        await interaction.update(buildPollMessage(updated, extras) as any);
     }
 
     private async handleClose(interaction: ButtonInteraction) {
@@ -341,13 +390,11 @@ export default class InteractionCreateListener extends Listener<
 
         // Only the poll creator or a guild admin may close the poll
         if (interaction.user.id !== poll.creatorId) {
-            // Allow users with Administrator permission to close as well
             const member = (interaction as any).member;
             const isAdmin = !!(
                 member &&
                 member.permissions &&
                 typeof member.permissions.has === 'function' &&
-                // permissions.has may accept a string or numeric flag; tests will mock it
                 member.permissions.has('Administrator')
             );
             if (!isAdmin) {
@@ -360,16 +407,12 @@ export default class InteractionCreateListener extends Listener<
         }
 
         if (poll.closed) {
-            await interaction.reply({
-                content: "Poll is already closed.",
-                ephemeral: true,
-            });
+            await interaction.reply({ content: "Poll is already closed.", ephemeral: true });
             return;
         }
 
         Polls.close(poll.id);
-
-        const updated = Polls.get(poll.id)!
+        const updated = Polls.get(poll.id)!;
 
         await interaction.update({
             content: renderPollContent(updated),

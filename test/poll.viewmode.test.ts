@@ -11,7 +11,7 @@ describe('Poll view mode toggle', () => {
         listener = new InteractionCreateListener({} as any, {} as any);
     });
 
-    it('buildPollMessage uses content for list mode and embed for grid mode', async () => {
+    it('buildPollMessage uses content for list mode and file for grid mode', async () => {
         const poll = Polls.createPoll({channelId: 'c-v1', creatorId: 'creatorV', dates: ['2025-08-30', '2025-08-31']});
 
         // Default is list
@@ -35,7 +35,9 @@ describe('Poll view mode toggle', () => {
         const arg = interaction.update.mock.calls[0][0];
         expect(arg.content).toBe('');
         expect(Array.isArray(arg.embeds)).toBe(true);
-        expect(arg.embeds.length).toBe(1);
+        expect(arg.embeds.length).toBe(0);
+        expect(Array.isArray(arg.files)).toBe(true);
+        expect(arg.files.length).toBeGreaterThanOrEqual(1);
 
         // Toggle back to list
         interaction.update.mockClear();
@@ -44,9 +46,11 @@ describe('Poll view mode toggle', () => {
         expect(arg2.content).toBeTypeOf('string');
         expect(Array.isArray(arg2.embeds)).toBe(true);
         expect(arg2.embeds.length).toBe(0);
+        expect(Array.isArray(arg2.files)).toBe(true);
+        expect(arg2.files.length).toBe(0);
     });
 
-    it('grid embed shows compact table-like info when there are voters', async () => {
+    it('grid view uses a standalone PNG image when there are voters', async () => {
         const poll = Polls.createPoll({channelId: 'c-v2', creatorId: 'creatorV2', dates: ['2025-08-30', '2025-08-31']});
         // add some votes so users appear as rows
         Polls.toggle(poll.id, '2025-08-30', 'u1');
@@ -63,13 +67,14 @@ describe('Poll view mode toggle', () => {
         await listener.run(interaction);
 
         const arg = interaction.update.mock.calls[0][0];
-        const desc = arg.embeds[0].data?.description || arg.embeds[0].description;
-        expect(desc).toMatch(/Dates:/);
-        expect(desc).toMatch(/#1/);
-        expect(desc).not.toMatch(/```/);
+        expect(Array.isArray(arg.files)).toBe(true);
+        const fileNames = (arg.files || []).map((f: any) => f?.name);
+        expect(fileNames).toContain('grid.png');
+        expect(Array.isArray(arg.embeds)).toBe(true);
+        expect(arg.embeds.length).toBe(0);
     });
 
-    it('grid view attaches a PNG image and sets embed image to the attachment', async () => {
+    it('grid view attaches a PNG image (no embed image)', async () => {
         const poll = Polls.createPoll({channelId: 'c-v3', creatorId: 'creatorV3', dates: ['2025-08-30', '2025-08-31']});
         // two voters so matrix has 2 rows
         Polls.toggle(poll.id, '2025-08-30', 'u1');
@@ -90,8 +95,8 @@ describe('Poll view mode toggle', () => {
         expect(Array.isArray(arg.files)).toBe(true);
         const fileNames = (arg.files || []).map((f: any) => f?.name);
         expect(fileNames).toContain('grid.png');
-        // embed image should point to the attachment
-        const imgUrl = arg.embeds[0].data?.image?.url || arg.embeds[0].image?.url;
-        expect(imgUrl).toBe('attachment://grid.png');
+        // no embeds should be present in grid mode
+        expect(Array.isArray(arg.embeds)).toBe(true);
+        expect(arg.embeds.length).toBe(0);
     });
 });
