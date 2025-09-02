@@ -3,18 +3,13 @@
   "mutate": [
     "src/**/*.ts"
   ],
-  "mutator": {
-    "name": "@stryker-mutator/typescript",
-    "tsconfigFile": "tsconfig.json"
-  },
-  "testRunner": "@stryker-mutator/vitest-runner",
+  "testRunner": "vitest",
   "coverageAnalysis": "perTest",
   "packageManager": "npm",
   "reporters": ["progress", "clear-text", "html"],
   "htmlReporter": {
-    "baseDir": "reports/mutation"
+    "fileName": "reports/mutation/mutation-report.html"
   },
   "timeoutMS": 10000,
   "concurrency": 2
 }
-
