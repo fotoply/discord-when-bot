@@ -68,4 +68,30 @@ describe('Poll view mode toggle', () => {
         expect(desc).toMatch(/#1/);
         expect(desc).not.toMatch(/```/);
     });
+
+    it('grid view attaches a PNG image and sets embed image to the attachment', async () => {
+        const poll = Polls.createPoll({channelId: 'c-v3', creatorId: 'creatorV3', dates: ['2025-08-30', '2025-08-31']});
+        // two voters so matrix has 2 rows
+        Polls.toggle(poll.id, '2025-08-30', 'u1');
+        Polls.toggle(poll.id, '2025-08-31', 'u2');
+
+        const interaction: any = {
+            isButton: () => true,
+            customId: `when:view:${poll.id}`,
+            user: {id: 'any'},
+            reply: vi.fn().mockResolvedValue(undefined),
+            update: vi.fn().mockResolvedValue(undefined),
+        };
+
+        await listener.run(interaction);
+
+        const arg = interaction.update.mock.calls[0][0];
+        // files should include our grid.png
+        expect(Array.isArray(arg.files)).toBe(true);
+        const fileNames = (arg.files || []).map((f: any) => f?.name);
+        expect(fileNames).toContain('grid.png');
+        // embed image should point to the attachment
+        const imgUrl = arg.embeds[0].data?.image?.url || arg.embeds[0].image?.url;
+        expect(imgUrl).toBe('attachment://grid.png');
+    });
 });
