@@ -46,3 +46,14 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_poll_votes_poll ON poll_votes (poll_id);
     CREATE INDEX IF NOT EXISTS idx_poll_votes_user ON poll_votes (user_id);
 `);
+
+// Lightweight migration: ensure polls.view_mode exists
+try {
+    const cols = db.prepare("PRAGMA table_info(polls)").all() as Array<{ name: string }>;
+    const hasViewMode = cols.some((c) => c.name === "view_mode");
+    if (!hasViewMode) {
+        db.exec("ALTER TABLE polls ADD COLUMN view_mode TEXT NOT NULL DEFAULT 'list'");
+    }
+} catch (e) {
+    // Best effort; tests will reveal if anything goes wrong
+}

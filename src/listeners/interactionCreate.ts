@@ -9,7 +9,7 @@ import {
 import {Polls} from "../store/polls.js";
 import {Sessions} from "../store/sessions.js";
 import {buildDateRange, buildFutureDates, formatDateLabel, isValidISODate,} from "../util/date.js";
-import {componentsFor, renderPollContent} from "../util/pollRender.js";
+import {componentsFor, renderPollContent, buildPollMessage} from "../util/pollRender.js";
 
 // Type guards for narrowing Interaction to specific interaction types
 function isModalSubmitInteraction(i: Interaction): i is import('discord.js').ModalSubmitInteraction {
@@ -48,6 +48,10 @@ export default class InteractionCreateListener extends Listener<
             }
             if (interaction.customId.startsWith("when:toggleAll:")) {
                 await this.handleToggleAll(interaction);
+                return;
+            }
+            if (interaction.customId.startsWith("when:view:")) {
+                await this.handleViewToggle(interaction);
                 return;
             }
             if (interaction.customId.startsWith("when:close:")) {
@@ -109,15 +113,12 @@ export default class InteractionCreateListener extends Listener<
             dates,
         });
 
-        const rows = componentsFor(poll);
+        const message = buildPollMessage(poll);
 
-        await interaction.reply({
-            content: renderPollContent(poll),
-            components: rows,
-        });
+        await interaction.reply(message);
 
-        const message = await interaction.fetchReply();
-        Polls.setMessageId(poll.id, message.id);
+        const replyMsg = await interaction.fetchReply();
+        Polls.setMessageId(poll.id, replyMsg.id);
 
         await interaction
             .followUp({content: "Poll created!", ephemeral: true})
@@ -215,12 +216,9 @@ export default class InteractionCreateListener extends Listener<
             dates,
         });
 
-        const rows = componentsFor(poll);
+        const messageOpts = buildPollMessage(poll);
 
-        const message = await interaction.channel.send({
-            content: renderPollContent(poll),
-            components: rows,
-        });
+        const message = await interaction.channel.send(messageOpts as any);
 
         Polls.setMessageId(poll.id, message.id);
 
@@ -266,10 +264,7 @@ export default class InteractionCreateListener extends Listener<
 
         const updated = Polls.get(poll.id)!;
 
-        await interaction.update({
-            content: renderPollContent(updated),
-            components: componentsFor(updated),
-        });
+        await interaction.update(buildPollMessage(updated) as any);
     }
 
     private async handleToggleAll(interaction: ButtonInteraction) {
@@ -300,10 +295,26 @@ export default class InteractionCreateListener extends Listener<
 
         const updated = Polls.get(poll.id)!;
 
-        await interaction.update({
-            content: renderPollContent(updated),
-            components: componentsFor(updated),
-        });
+        await interaction.update(buildPollMessage(updated) as any);
+    }
+
+    private async handleViewToggle(interaction: ButtonInteraction) {
+        const parts = interaction.customId.split(":");
+        const pollId = parts[2];
+
+        const poll = pollId ? Polls.get(pollId) : null;
+        if (!poll) {
+            await interaction.reply({content: "Poll not found.", ephemeral: true});
+            return;
+        }
+        if (poll.closed) {
+            await interaction.reply({content: "This poll is closed.", ephemeral: true});
+            return;
+        }
+
+        Polls.toggleViewMode(poll.id);
+        const updated = Polls.get(poll.id)!;
+        await interaction.update(buildPollMessage(updated) as any);
     }
 
     private async handleClose(interaction: ButtonInteraction) {

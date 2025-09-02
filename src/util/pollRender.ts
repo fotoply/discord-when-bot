@@ -1,5 +1,5 @@
 // filepath: c:\Users\norbe\IdeaProjects\discord-when-bot\src\util\pollRender.ts
-import {ActionRowBuilder, ButtonBuilder, ButtonStyle} from "discord.js";
+import {ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder} from "discord.js";
 import {NONE_SELECTION, Poll} from "../store/polls.js";
 import {formatDateLabel} from "./date.js";
 
@@ -31,6 +31,10 @@ export function componentsFor(poll: Poll): ActionRowBuilder<ButtonBuilder>[] {
         new ButtonBuilder()
             .setCustomId(`when:toggleAll:${poll.id}`)
             .setLabel("Toggle all")
+            .setStyle(ButtonStyle.Secondary) as any,
+        new ButtonBuilder()
+            .setCustomId(`when:view:${poll.id}`)
+            .setLabel("Switch view")
             .setStyle(ButtonStyle.Secondary) as any,
         new ButtonBuilder()
             .setCustomId(`when:close:${poll.id}`)
@@ -80,4 +84,56 @@ export function renderPollContent(poll: Poll): string {
     lines.push(`Voters: ${votersLine}`);
 
     return lines.join("\n");
+}
+
+function renderGridEmbed(poll: Poll): EmbedBuilder {
+    // Collect real dates (columns)
+    const dates = poll.dates.filter((d) => d !== NONE_SELECTION);
+
+    // Collect users who voted on anything (including NONE_SELECTION)
+    const usersSet = new Set<string>();
+    for (const [, set] of poll.selections) for (const u of set) usersSet.add(u);
+    const users = [...usersSet].sort();
+
+    // Helper to render compact date like MM/DD
+    const shortDate = (iso: string) => {
+        const d = new Date(iso + "T00:00:00Z");
+        const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+        const day = String(d.getUTCDate()).padStart(2, "0");
+        return `${m}/${day}`;
+    };
+
+    const title = poll.closed ? `Availability — CLOSED` : `Availability grid`;
+
+    // Description includes Dates and legend mapping
+    const datesLine = dates.length ? `Dates: ${dates.map(shortDate).join(", ")}` : "Dates: -";
+    const legend = users.length ? `Legend: ` + users.map((u, i) => `#${i + 1} <@${u}>`).join(", ") : "";
+    const description = legend ? `${datesLine}\n${legend}` : datesLine;
+
+    // Build inline fields to form columns
+    const fields: { name: string; value: string; inline?: boolean }[] = [];
+    // Index column
+    const indexValues = users.length ? users.map((_, i) => `#${i + 1}`).join("\n") : "-";
+    fields.push({ name: "#", value: indexValues, inline: true });
+    // One field per date
+    for (const d of dates) {
+        const col = users.length
+            ? users.map((u) => (poll.selections.get(d)?.has(u) ? "x" : ".")).join("\n")
+            : "-";
+        fields.push({ name: shortDate(d), value: col, inline: true });
+    }
+
+    const embed = new EmbedBuilder().setTitle(title).setDescription(description).setFooter({ text: `Created by @${poll.creatorId}` });
+    if (fields.length) embed.addFields(fields as any);
+    return embed;
+}
+
+export function buildPollMessage(poll: Poll): { content?: string; embeds?: any[]; components: ActionRowBuilder<ButtonBuilder>[] } {
+    if (!poll.closed && poll.viewMode === "grid") {
+        const embed = renderGridEmbed(poll);
+        // Explicitly clear content to hide list when showing grid
+        return {content: "", embeds: [embed], components: componentsFor(poll)};
+    }
+    // default/list or closed -> plain content; explicitly clear embeds to hide grid
+    return {content: renderPollContent(poll), embeds: [], components: poll.closed ? [] : componentsFor(poll)};
 }

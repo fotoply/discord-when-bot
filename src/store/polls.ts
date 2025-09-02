@@ -11,6 +11,7 @@ export type Poll = {
     dates: string[]; // YYYY-MM-DD or NONE_SELECTION
     selections: Map<string, Set<string>>; // date -> users
     closed?: boolean;
+    viewMode?: "list" | "grid";
 };
 
 class PollStore {
@@ -33,6 +34,7 @@ class PollStore {
             dates: [...input.dates, NONE_SELECTION],
             selections,
             closed: false,
+            viewMode: "list",
         };
         // Persist in a transaction
         const trx = db.transaction(() => {
@@ -180,6 +182,15 @@ class PollStore {
         return {allSelected: !hasAll};
     }
 
+    toggleViewMode(pollId: string): "list" | "grid" | null {
+        const poll = this.polls.get(pollId) ?? this.hydrate(pollId);
+        if (!poll || poll.closed) return null;
+        const next: "list" | "grid" = poll.viewMode === "grid" ? "list" : "grid";
+        poll.viewMode = next;
+        db.prepare("UPDATE polls SET view_mode = ? WHERE id = ?").run(next, pollId);
+        return next;
+    }
+
     counts(pollId: string): Record<string, number> | null {
         const poll = this.polls.get(pollId) ?? this.hydrate(pollId);
         if (!poll) return null;
@@ -215,7 +226,7 @@ class PollStore {
         // Load a poll from DB
         const row = db
             .prepare(
-                "SELECT id, channel_id AS channelId, creator_id AS creatorId, message_id AS messageId, closed FROM polls WHERE id = ?",
+                "SELECT id, channel_id AS channelId, creator_id AS creatorId, message_id AS messageId, closed, COALESCE(view_mode, 'list') AS viewMode FROM polls WHERE id = ?",
             )
             .get(pollId) as
             | {
@@ -224,6 +235,7 @@ class PollStore {
             creatorId: string;
             messageId?: string;
             closed: number;
+            viewMode?: "list" | "grid";
         }
             | undefined;
         if (!row) return undefined;
@@ -250,6 +262,7 @@ class PollStore {
             dates,
             selections,
             closed: row.closed === 1,
+            viewMode: row.viewMode ?? "list",
         };
         this.polls.set(pollId, poll);
         return poll;
