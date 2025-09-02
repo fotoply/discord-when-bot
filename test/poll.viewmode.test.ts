@@ -102,4 +102,32 @@ describe('Poll view mode toggle', () => {
         expect(Array.isArray(arg.embeds)).toBe(true);
         expect(arg.embeds.length).toBe(0);
     });
+
+    it('grid mode with no real dates returns no files', async () => {
+        // create a poll with no real dates (only NONE_SELECTION will be present)
+        const poll = Polls.createPoll({channelId: 'c-empty', creatorId: 'creatorEmpty', dates: []});
+        // toggle to grid view
+        Polls.toggleViewMode(poll.id);
+
+        const msg = buildPollMessage(poll);
+        expect(Array.isArray(msg.files)).toBe(true);
+        expect((msg.files || []).length).toBe(0);
+        // content should be empty string for grid mode
+        expect(msg.content).toBe('');
+    });
+
+    it('buildPollMessage in grid mode with no voters but with dates still attaches a PNG', async () => {
+        // create a poll with dates but no votes; renderGridPng should still be called
+        __setCanvasModule(makeFakeCanvasModule());
+        const poll = Polls.createPoll({channelId: 'c-novotes', creatorId: 'creatorNoVotes', dates: ['2025-09-01']});
+        // toggle to grid view
+        Polls.toggleViewMode(poll.id);
+
+        const msg = buildPollMessage(poll);
+        expect(Array.isArray(msg.files)).toBe(true);
+        // since there is a real date, a PNG should be attached even if no voters exist
+        expect((msg.files || []).length).toBeGreaterThanOrEqual(1);
+        const names = (msg.files || []).map((f: any) => f?.name);
+        expect(names).toContain('grid.png');
+    });
 });
