@@ -423,10 +423,8 @@ export default class InteractionCreateListener extends Listener<
 
         Polls.close(poll.id);
         const updated = Polls.get(poll.id)!;
-
-        await interaction.update({
-            content: renderPollContent(updated),
-            components: [],
-        });
+        // Show both list and grid view on closed poll
+        const extras = await this.buildGridExtras(updated, interaction);
+        await interaction.update(buildPollMessage(updated, extras) as any);
     }
 }

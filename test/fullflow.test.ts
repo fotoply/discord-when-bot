@@ -78,8 +78,19 @@ describe('Full-flow: start bot, create poll, users vote, and close', () => {
     const closeIx = await fw.emitButton(closeBtnId, poll.creatorId);
     expect(closeIx.update).toHaveBeenCalled();
 
-    // Poll should be closed and components removed in the update payload
+    // Poll should be closed
     expect(Polls.isClosed(poll.id)).toBe(true);
+    // The update payload should include list content and attached image file only (no embeds or components)
+    const closeArg = closeIx.update.mock.calls[0][0];
+    expect(typeof closeArg.content).toBe('string');
+    expect(closeArg.content).toContain('Availability poll by');
+    expect(Array.isArray(closeArg.embeds)).toBe(true);
+    expect(closeArg.embeds.length).toBe(0);
+    expect(Array.isArray(closeArg.files)).toBe(true);
+    const fileNames = (closeArg.files || []).map((f: any) => f.name);
+    expect(fileNames).toContain('grid.png');
+    expect(Array.isArray(closeArg.components)).toBe(true);
+    expect(closeArg.components.length).toBe(0);
   });
 
   it('toggle-all selects all real dates then clears them on second click', async () => {

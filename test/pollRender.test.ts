@@ -23,6 +23,10 @@ describe('pollRender util', () => {
 
         expect(labels).toContain('Toggle all');
         expect(labels).toContain('Close poll');
+        // Ensure no row has more than 5 buttons
+        for (const row of rows) {
+            expect(row.components.length).toBeLessThanOrEqual(5);
+        }
     });
 
     it('stars appear only in content, not on buttons, when all voters are available for a date', () => {
@@ -31,6 +35,10 @@ describe('pollRender util', () => {
         Polls.toggleAll(poll.id, 'u2');
 
         const rows = componentsFor(poll) as ActionRowBuilder<ButtonBuilder>[];
+        // Ensure no row has more than 5 buttons
+        for (const row of rows) {
+            expect(row.components.length).toBeLessThanOrEqual(5);
+        }
         const perDateRows = rows.slice(0, Math.max(0, rows.length - 1));
 
         // Ensure no button labels have a star prefix anymore
@@ -54,6 +62,10 @@ describe('pollRender util', () => {
         expect(content).toContain('<@u-none>');
 
         const rows = componentsFor(poll) as ActionRowBuilder<ButtonBuilder>[];
+        // Ensure no row has more than 5 buttons
+        for (const row of rows) {
+            expect(row.components.length).toBeLessThanOrEqual(5);
+        }
         const hasNone = rows.some((r) =>
             r.components.some((c) => ((c as any).data?.label as string | undefined)?.includes('None of these dates')),
         );

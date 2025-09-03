@@ -42,7 +42,13 @@ export function componentsFor(poll: Poll): ActionRowBuilder<ButtonBuilder>[] {
             .setLabel("Close poll")
             .setStyle(ButtonStyle.Danger) as any,
     );
-    rows.push(controls);
+    // Merge controls into last row if it fits, otherwise add as new row
+    const lastRow = rows[rows.length - 1];
+    if (lastRow && lastRow.components.length + controls.components.length <= 5) {
+        lastRow.addComponents(...controls.components as any[]);
+    } else {
+        rows.push(controls);
+    }
 
     return rows;
 }
@@ -166,10 +172,23 @@ function buildGridImageEmbed(poll: Poll, extras?: GridExtras): { embed: EmbedBui
 }
 
 export function buildPollMessage(poll: Poll, extras?: GridExtras): { content?: string; embeds?: any[]; components: ActionRowBuilder<ButtonBuilder>[]; files?: any[]; attachments?: any[] } {
-    if (!poll.closed && poll.viewMode === "grid") {
-        const { /* embed, */ file } = buildGridImageEmbed(poll, extras);
-        return { content: "", embeds: [], components: componentsFor(poll), files: file ? [file] : [] };
-    }
-    // default/list or closed -> plain content; explicitly clear embeds and attachments to hide grid
-    return {content: renderPollContent(poll), embeds: [], components: poll.closed ? [] : componentsFor(poll), files: [], attachments: []};
+     // Open grid view for open polls
+     if (!poll.closed && poll.viewMode === "grid") {
+         const { file } = buildGridImageEmbed(poll, extras);
+         return { content: "", embeds: [], components: componentsFor(poll), files: file ? [file] : [], attachments: [] };
+     }
+     // Closed poll: show list content and attach grid image file only (no embed)
+     if (poll.closed) {
+         // attach grid image file without using an embed
+         const { file } = buildGridImageEmbed(poll, extras);
+         return {
+            content: renderPollContent(poll),
+            embeds: [],
+            components: [],
+            files: file ? [file] : [],
+            attachments: []
+        };
+     }
+     // Default list view for open polls
+     return { content: renderPollContent(poll), embeds: [], components: componentsFor(poll), files: [], attachments: [] };
 }

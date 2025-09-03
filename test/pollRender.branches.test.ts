@@ -21,18 +21,20 @@ describe('pollRender branches', () => {
     expect(capped).toBe(long.slice(0, 8));
   });
 
-  it('buildPollMessage for closed poll returns content with no components and clears attachments', () => {
+  it('buildPollMessage for closed poll returns content with no components and attaches only the image file', () => {
     const poll = Polls.createPoll({ channelId: 'c-prb', creatorId: 'creator', dates: ['2025-08-30'] });
-    // also cover the branch where the view mode is grid before closing
     Polls.toggleViewMode(poll.id);
     Polls.close(poll.id);
 
     const msg = buildPollMessage(poll);
     expect(typeof msg.content).toBe('string');
     expect((msg.components || []).length).toBe(0);
+    // no embeds for closed poll
+    expect(Array.isArray(msg.embeds)).toBe(true);
+    expect((msg.embeds || []).length).toBe(0);
+    // only file attachment for grid image
     expect(Array.isArray(msg.files)).toBe(true);
-    expect(msg.files!.length).toBe(0);
-    // explicitly present and empty to ensure grid image is hidden
+    expect((msg.files || []).length).toBeGreaterThanOrEqual(1);
     expect(Array.isArray((msg as any).attachments)).toBe(true);
     expect(((msg as any).attachments as any[]).length).toBe(0);
   });
