@@ -5,7 +5,11 @@ import {Polls} from '../src/store/polls.js';
 
 vi.mock('@sapphire/decorators', () => ({ApplyOptions: (_opts: any) => (target: any) => target}));
 vi.mock('@sapphire/framework', () => ({
-    Command: class Command {
+    Command: class Command {},
+    // Add stub for registerContextMenuCommand
+    ApplicationCommandRegistry: class {
+        registerChatInputCommand() {}
+        registerContextMenuCommand() {}
     }
 }));
 
@@ -226,6 +230,10 @@ describe('Poll command', () => {
                 receivedGuildOpt = guildOpt;
                 return undefined;
             },
+            registerContextMenuCommand: (_fn: Function, _guildOpt?: any) => {
+                // Stub for context menu registration
+                return undefined;
+            },
         };
 
         await PollCommandClass.prototype.registerApplicationCommands.call({
@@ -307,5 +315,139 @@ describe('Poll command', () => {
         const updated = Polls.get(poll.id)!;
         expect(updated.messageId).toBe('new-after-delerr');
         expect(updated.channelId).toBe('dest-delerr');
+    });
+
+    it('context menu Reopen poll reopens a closed poll for admin', async () => {
+        const poll = Polls.createPoll({channelId: 'chan-cm', creatorId: 'creatorCM', dates: ['2025-08-30']});
+        poll.messageId = 'msg-cm';
+        Polls.close(poll.id);
+        expect(poll.closed).toBe(true);
+
+        const fakeCmd: any = {};
+        const interaction: any = {
+            targetMessage: {id: 'msg-cm'},
+            member: {
+                permissions: {has: (perm: string) => perm === 'Administrator'},
+            },
+            reply: vi.fn().mockResolvedValue(undefined),
+        };
+
+        await PollCommand.prototype.messageRun.call(fakeCmd, interaction as any);
+
+        expect(interaction.reply).toHaveBeenCalled();
+        const arg = interaction.reply.mock.calls[0][0];
+        expect(arg.content).toContain('has been reopened');
+        expect(poll.closed).toBe(false);
+    });
+
+    it('context menu Reopen poll fails for non-admin', async () => {
+        const poll = Polls.createPoll({channelId: 'chan-cm2', creatorId: 'creatorCM2', dates: ['2025-08-30']});
+        poll.messageId = 'msg-cm2';
+        Polls.close(poll.id);
+        expect(poll.closed).toBe(true);
+
+        const fakeCmd: any = {};
+        const interaction: any = {
+            targetMessage: {id: 'msg-cm2'},
+            member: {
+                permissions: {has: (_: string) => false},
+            },
+            reply: vi.fn().mockResolvedValue(undefined),
+        };
+
+        await PollCommand.prototype.messageRun.call(fakeCmd, interaction as any);
+
+        expect(interaction.reply).toHaveBeenCalled();
+        const arg = interaction.reply.mock.calls[0][0];
+        expect(arg.content).toContain('Only an admin can reopen polls');
+        expect(poll.closed).toBe(true);
+    });
+
+    it('reopened poll message has buttons and correct view mode', async () => {
+        const poll = Polls.createPoll({channelId: 'chan-reopen', creatorId: 'creatorReopen', dates: ['2025-09-10', '2025-09-11']});
+        poll.messageId = 'msg-reopen';
+        poll.viewMode = 'grid';
+        Polls.close(poll.id);
+        expect(poll.closed).toBe(true);
+
+        // Reopen via context menu as admin
+        const fakeCmd: any = {};
+        const interaction: any = {
+            targetMessage: {id: 'msg-reopen'},
+            member: {
+                permissions: {has: (perm: string) => perm === 'Administrator'},
+            },
+            reply: vi.fn().mockResolvedValue(undefined),
+        };
+        await PollCommand.prototype.messageRun.call(fakeCmd, interaction as any);
+        expect(interaction.reply).toHaveBeenCalled();
+        expect(poll.closed).toBe(false);
+
+        // Check buttons are present
+        const {componentsFor} = await import('../src/util/pollRender.js');
+        const components = componentsFor(poll);
+        expect(components.length).toBeGreaterThan(0);
+        // Check view mode is preserved
+        expect(poll.viewMode).toBe('grid');
+    });
+
+    it('reopened poll responds to button input', async () => {
+        const poll = Polls.createPoll({channelId: 'chan-btn', creatorId: 'creatorBtn', dates: ['2025-09-12']});
+        poll.messageId = 'msg-btn';
+        Polls.close(poll.id);
+        // Reopen
+        poll.closed = false;
+        // Simulate button interaction
+        const userId = 'user-btn';
+        const result = Polls.toggle(poll.id, poll.dates[0]!, userId);
+        expect(result).not.toBeNull();
+        expect(result!.selected).toBe(true);
+        expect(poll.selections.get(poll.dates[0]!)!.has(userId)).toBe(true);
+    });
+
+    it('context menu Reopen poll on non-poll message sends error', async () => {
+        const fakeCmd: any = {};
+        const interaction: any = {
+            targetMessage: {id: 'not-a-poll-msg'},
+            member: {
+                permissions: {has: (perm: string) => perm === 'Administrator'},
+            },
+            reply: vi.fn().mockResolvedValue(undefined),
+        };
+        await PollCommand.prototype.messageRun.call(fakeCmd, interaction as any);
+        expect(interaction.reply).toHaveBeenCalled();
+        const arg = interaction.reply.mock.calls[0][0];
+        expect(arg.content).toContain('not a poll');
+    });
+
+    it('context menu Reopen poll hydrates from DB and edits existing message', async () => {
+        const poll = Polls.createPoll({channelId: 'chan-hydrate', creatorId: 'creatorHyd', dates: ['2025-09-20']});
+        // Persist the message id so it exists in the DB after we clear the in-memory cache
+        Polls.setMessageId(poll.id, 'msg-hydrate');
+        Polls.close(poll.id);
+        // Simulate a restart by clearing in-memory cache
+        (Polls as any).polls.clear();
+
+        const oldMsg = {edit: vi.fn().mockResolvedValue(undefined)};
+        const oldChannel = {isTextBased: () => true, messages: {fetch: vi.fn().mockResolvedValue(oldMsg)}};
+        const channelsFetch = vi.fn().mockResolvedValue(oldChannel);
+
+        const fakeCmd: any = {container: {client: {channels: {fetch: channelsFetch}}}};
+        const interaction: any = {
+            targetMessage: {id: 'msg-hydrate'},
+            member: {
+                permissions: {has: (perm: string) => perm === 'Administrator'},
+            },
+            reply: vi.fn().mockResolvedValue(undefined),
+        };
+
+        await PollCommand.prototype.messageRun.call(fakeCmd, interaction as any);
+
+        expect(channelsFetch).toHaveBeenCalledWith('chan-hydrate');
+        expect(oldChannel.messages.fetch).toHaveBeenCalledWith('msg-hydrate');
+        expect(oldMsg.edit).toHaveBeenCalled();
+
+        const arg = interaction.reply.mock.calls[0][0];
+        expect(arg.content).toContain('has been reopened');
     });
 });

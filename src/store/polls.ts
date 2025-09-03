@@ -207,6 +207,14 @@ class PollStore {
         }
     }
 
+    reopen(pollId: string) {
+        const poll = this.polls.get(pollId) ?? this.hydrate(pollId);
+        if (poll) {
+            poll.closed = false;
+            db.prepare("UPDATE polls SET closed = 0 WHERE id = ?").run(pollId);
+        }
+    }
+
     isClosed(pollId: string): boolean {
         return (this.polls.get(pollId) ?? this.hydrate(pollId))?.closed === true;
     }
@@ -220,6 +228,16 @@ class PollStore {
             if (p) out.push(p);
         }
         return out;
+   }
+
+    findByMessageId(messageId: string): Poll | undefined {
+        for (const poll of this.polls.values()) {
+            if (poll.messageId === messageId) return poll;
+        }
+        // If not found in memory, try to locate the poll in the DB by message_id and hydrate it.
+        const row = db.prepare("SELECT id, closed FROM polls WHERE message_id = ? ORDER BY rowid DESC LIMIT 1").get(messageId) as { id: string, closed: number } | undefined;
+        if (!row) return undefined;
+        return this.hydrate(row.id);
     }
 
     private hydrate(pollId: string): Poll | undefined {

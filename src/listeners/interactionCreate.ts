@@ -9,7 +9,7 @@ import {
 import {Polls} from "../store/polls.js";
 import {Sessions} from "../store/sessions.js";
 import {buildDateRange, buildFutureDates, formatDateLabel, isValidISODate,} from "../util/date.js";
-import { renderPollContent, buildPollMessage} from "../util/pollRender.js";
+import {buildPollMessage} from "../util/pollRender.js";
 
 // Type guards for narrowing Interaction to specific interaction types
 function isModalSubmitInteraction(i: Interaction): i is import('discord.js').ModalSubmitInteraction {
@@ -382,8 +382,10 @@ export default class InteractionCreateListener extends Listener<
             return;
         }
 
-        Polls.toggleViewMode(poll.id);
+        // Toggle view mode and ensure the in-memory poll reflects the change (some test mocks may rely on it)
+        const newMode = Polls.toggleViewMode(poll.id);
         const updated = Polls.get(poll.id)!;
+        if (newMode) updated.viewMode = newMode;
         const extras = await this.buildGridExtras(updated, interaction);
         await interaction.update(buildPollMessage(updated, extras) as any);
     }

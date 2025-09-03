@@ -10,7 +10,7 @@ describe('When command', () => {
         const mod = await modPromise;
         const WhenCommand = mod.default;
 
-        const replySpy = vi.fn();
+        const replySpy: any = vi.fn();
         const interaction = {
             reply: replySpy,
         } as any;
@@ -22,7 +22,7 @@ describe('When command', () => {
         }, interaction);
 
         expect(replySpy).toHaveBeenCalled();
-        const arg = replySpy.mock.calls[0][0];
+        const arg = replySpy.mock.calls[0][0]!;
         expect(arg.content).toContain('Select a date range');
         expect(Array.isArray(arg.components)).toBe(true);
         expect(arg.components.length).toBe(2);
@@ -33,4 +33,3 @@ describe('When command', () => {
         expect(typeof iso).toBe('string');
     });
 });
-

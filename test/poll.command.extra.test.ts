@@ -4,7 +4,10 @@ import PollCommand from '../src/commands/poll.js';
 
 vi.mock('@sapphire/decorators', () => ({ApplyOptions: (_opts: any) => (target: any) => target}));
 vi.mock('@sapphire/framework', () => ({
-    Command: class Command {
+    Command: class Command {},
+    ApplicationCommandRegistry: class {
+        registerChatInputCommand() {}
+        registerContextMenuCommand() {}
     }
 }));
 
@@ -58,6 +61,10 @@ describe('Poll command extra', () => {
                 receivedGuildOpt = guildOpt;
                 return undefined;
             },
+            registerContextMenuCommand: (_fn: Function, _guildOpt?: any) => {
+                // Stub for context menu registration
+                return undefined;
+            },
         };
 
         await PollCommandClass.prototype.registerApplicationCommands.call({
@@ -71,4 +78,3 @@ describe('Poll command extra', () => {
         if (prev === undefined) delete process.env.GUILD_ID; else process.env.GUILD_ID = prev;
     });
 });
-
