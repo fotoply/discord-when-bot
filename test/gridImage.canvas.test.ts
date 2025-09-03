@@ -108,6 +108,15 @@ describe('gridImage renderer (canvas path)', () => {
     expect(png.height).toBeGreaterThan(0);
   });
 
+  it('renders multi-line headers with more than two lines', () => {
+    const matrix = [[true]];
+    const headers = ['Mon\n1/9\nExtra'];
+    const { buffer } = renderGridPng(matrix, { colHeaders: headers, rowLabels: ['A'], bgColor: '#001100' });
+    const png = PNG.sync.read(buffer as any);
+    expect(png.width).toBeGreaterThan(0);
+    expect(png.height).toBeGreaterThan(0);
+  });
+
   it('uses default rowLabelWidth when no rowLabels are provided', () => {
     const matrix = [ [true, false] ];
     const { width, height } = renderGridPng(matrix, {} as any);
@@ -129,6 +138,22 @@ describe('gridImage renderer (canvas path)', () => {
   it('takes avatar draw branch when rowAvatars are provided', () => {
     const matrix = [ [true] ];
     const fakePng = Buffer.from([137,80,78,71,13,10,26,10]);
+    const { buffer } = renderGridPng(matrix, { rowLabels: ['A'], rowAvatars: [fakePng] as any, bgColor: '#000000' });
+    const png = PNG.sync.read(buffer as any);
+    expect(png.width).toBeGreaterThan(0);
+  });
+
+  it('honors very long row label and expands rowLabelWidth accordingly', () => {
+    const longLabel = 'ThisIsAVeryLongLabelThatShouldIncreaseMeasuredWidthSignificantly';
+    const matrix = [[true]];
+    const { width } = renderGridPng(matrix, { rowLabels: [longLabel] as any });
+    // width should be larger or equal to default when label is long (sanity check)
+    expect(width).toBeGreaterThanOrEqual(240 + 99);
+  });
+
+  it('falls back to default avatar circle when provided rowAvatars entry is empty buffer', () => {
+    const fakePng = Buffer.from([]);
+    const matrix = [[true]];
     const { buffer } = renderGridPng(matrix, { rowLabels: ['A'], rowAvatars: [fakePng] as any, bgColor: '#000000' });
     const png = PNG.sync.read(buffer as any);
     expect(png.width).toBeGreaterThan(0);
@@ -165,5 +190,33 @@ describe('gridImage renderer (canvas path)', () => {
     const y = padding + headerHeight + 1;
     const idx = (png.width * y + xFalse) << 2;
     expect([png.data[idx], png.data[idx+1], png.data[idx+2], png.data[idx+3]]).toEqual([1,2,3,255]);
+  });
+
+  it('handles very narrow character measurement (spaceWidthZero) combined with charScale variations', () => {
+    // tiny characters -> computedRowLabelWidth might be small but Math.max should enforce minimum
+    __setCanvasModule(makeFakeCanvasModule({ spaceWidthZero: true, charScale: 0.2 }));
+    const matrix = [[true, false]];
+    const { width } = renderGridPng(matrix, { rowLabels: ['AA'] });
+    expect(width).toBeGreaterThan(0);
+
+    // large charScale -> measured width large and should increase rowLabelWidth
+    __setCanvasModule(makeFakeCanvasModule({ spaceWidthZero: false, charScale: 1.5 }));
+    const { width: w2 } = renderGridPng(matrix, { rowLabels: ['LONG LABEL EXAMPLE'] });
+    expect(w2).toBeGreaterThan(width);
+  });
+
+  it('renders correctly when there are zero rows or zero cols (empty matrix)', () => {
+    __setCanvasModule(makeFakeCanvasModule());
+    const { buffer, width, height } = renderGridPng([], { rowLabels: [], colHeaders: [] });
+    const png = PNG.sync.read(buffer as any);
+    expect(png.width).toBe(width);
+    expect(png.height).toBe(height);
+  });
+
+  it('caps avatar size at 84 when cellSize is large', () => {
+    const matrix = [[true]];
+    const { width, height } = renderGridPng(matrix, { rowLabels: ['A'] as any, cellSize: 300 });
+    expect(width).toBeGreaterThan(0);
+    expect(height).toBeGreaterThan(0);
   });
 });

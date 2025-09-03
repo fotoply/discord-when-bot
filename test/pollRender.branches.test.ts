@@ -23,7 +23,10 @@ describe('pollRender branches', () => {
 
   it('buildPollMessage for closed poll returns content with no components and clears attachments', () => {
     const poll = Polls.createPoll({ channelId: 'c-prb', creatorId: 'creator', dates: ['2025-08-30'] });
+    // also cover the branch where the view mode is grid before closing
+    Polls.toggleViewMode(poll.id);
     Polls.close(poll.id);
+
     const msg = buildPollMessage(poll);
     expect(typeof msg.content).toBe('string');
     expect((msg.components || []).length).toBe(0);
@@ -49,7 +52,6 @@ describe('pollRender extras influence grid image branches', () => {
       userIds: ['u2', 'u1'],
       rowLabels: ['Two', 'One'],
       rowAvatars: [Buffer.from([1]), Buffer.from([2])],
-      userLabelResolver: (id: string) => ({ u1: 'User One', u2: 'User Two' } as any)[id],
     };
 
     const msg = buildPollMessage(poll, extras as any);
@@ -67,11 +69,23 @@ describe('pollRender extras influence grid image branches', () => {
       userIds: ['u1'],
       rowLabels: ['OnlyThisLabel', 'Extra'], // mismatch length
       rowAvatars: [Buffer.from([1]), Buffer.from([2])], // mismatch length
-      userLabelResolver: (id: string) => 'X',
     };
 
     const msg = buildPollMessage(poll, extras as any);
     expect(Array.isArray(msg.files)).toBe(true);
     expect((msg.files || []).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('when no real dates exist, grid view returns no files (no image)', () => {
+    __setCanvasModule(makeFakeCanvasModule());
+    // create a poll with no real dates (empty list) -> only NONE_SELECTION remains
+    const poll = Polls.createPoll({ channelId: 'c-pr-none', creatorId: 'u0', dates: [] });
+    // switch to grid mode
+    Polls.toggleViewMode(poll.id);
+
+    const msg = buildPollMessage(poll as any, undefined as any);
+    // grid view but with no real dates should not attempt to attach a file
+    expect(Array.isArray(msg.files)).toBe(true);
+    expect((msg.files || []).length).toBe(0);
   });
 });

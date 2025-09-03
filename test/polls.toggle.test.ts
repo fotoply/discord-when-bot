@@ -64,5 +64,20 @@ describe('Polls toggle behavior', () => {
         expect(counts['2025-08-30']).toBe(0);
         expect(counts['2025-08-31']).toBe(0);
     });
-});
 
+    it('toggleAll clears NONE_SELECTION for the user when selecting all real dates', () => {
+        const poll = Polls.createPoll({channelId: 'c-all-none', creatorId: 't5', dates: ['2025-08-30', '2025-08-31']});
+        // user has NONE_SELECTION initially
+        Polls.toggle(poll.id, NONE_SELECTION, 'userE');
+        let counts = Polls.counts(poll.id)!;
+        expect(counts[NONE_SELECTION]).toBe(1);
+
+        // toggleAll should select real dates and clear NONE_SELECTION
+        const r1 = Polls.toggleAll(poll.id, 'userE');
+        expect(r1).not.toBeNull();
+        counts = Polls.counts(poll.id)!;
+        expect(counts['2025-08-30']).toBe(1);
+        expect(counts['2025-08-31']).toBe(1);
+        expect(counts[NONE_SELECTION]).toBe(0);
+    });
+});

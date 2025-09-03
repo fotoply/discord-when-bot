@@ -37,7 +37,8 @@ export default class InteractionCreateListener extends Listener<
     private async buildGridExtras(poll: import('../store/polls.js').Poll, interaction: any) {
         const usersSet = new Set<string>();
         for (const [, set] of poll.selections) for (const u of set) usersSet.add(u);
-        const userIds = [...usersSet].sort();
+        // Ensure deterministic ordering of user ids
+        const userIds = Array.from(usersSet).sort();
 
         const labelMap = new Map<string, string>();
         const rowAvatars: (Buffer | undefined)[] = [];
@@ -65,29 +66,38 @@ export default class InteractionCreateListener extends Listener<
             let avatarBuf: Buffer | undefined;
 
             const member = await getMember(id);
-            if (member) label = member.displayName ?? member.nickname ?? member.user?.username;
+            // Deterministic fallback order for labels. Prefer member values first
+            // then fall back to user-level values, finally the id as last resort.
+            if (member) {
+                const u = member.user ?? (member as any);
+                label = (member.displayName ?? member.nickname ?? u?.globalName ?? u?.username) as string | undefined;
+            }
             if (!label) {
                 const user = await getUser(id);
                 label = (user as any)?.displayName ?? (user as any)?.globalName ?? user?.username;
             }
-            labelMap.set(id, (label ?? '').trim());
+            if (!label) label = id;
+            labelMap.set(id, (String(label) ?? '').trim());
 
             // avatar fetch (best effort; skip on failure)
             try {
                 const userObj = member?.user ?? (await getUser(id));
-                const url = userObj?.displayAvatarURL?.({ extension: 'png', size: 128 });
-                if (url && typeof (globalThis as any).fetch === 'function') {
-                    const res = await (globalThis as any).fetch(url);
-                    if (res?.ok) {
-                        const ab = await res.arrayBuffer();
-                        avatarBuf = Buffer.from(ab);
-                    }
-                }
-            } catch {}
-            rowAvatars.push(avatarBuf);
-        }
+                // Prefer calling displayAvatarURL with sensible options if present.
+                const url = typeof userObj?.displayAvatarURL === 'function'
+                    ? userObj.displayAvatarURL({ extension: 'png', size: 128 })
+                    : undefined;
+                 if (url && typeof (globalThis as any).fetch === 'function') {
+                     const res = await (globalThis as any).fetch(url);
+                     if (res?.ok) {
+                         const ab = await res.arrayBuffer();
+                         avatarBuf = Buffer.from(ab);
+                     }
+                 }
+             } catch {}
+             rowAvatars.push(avatarBuf);
+         }
 
-        return { userIds, rowAvatars, userLabelResolver: (id: string) => labelMap.get(id) };
+         return { userIds, rowAvatars, userLabelResolver: (id: string) => labelMap.get(id) };
     }
 
     public async run(interaction: Interaction) {

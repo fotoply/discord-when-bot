@@ -11,6 +11,9 @@ describe('src/index entrypoint', () => {
     it('logs and exits when DISCORD_TOKEN is missing', async () => {
         delete process.env.DISCORD_TOKEN;
 
+        // Stub SapphireClient to a no-op to avoid timers/resources
+        vi.doMock('@sapphire/framework', () => ({ SapphireClient: class { constructor(_opts: any) {} login(_t?: string) { return Promise.resolve('noop'); } } as any }));
+
         const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {
         });
         // use a noop cast to any to satisfy TS which expects a function returning 'never'
@@ -25,19 +28,17 @@ describe('src/index entrypoint', () => {
 
         errSpy.mockRestore();
         exitSpy.mockRestore();
+        vi.unmock('@sapphire/framework');
     });
 
     it('constructs SapphireClient and calls login when token present', async () => {
         process.env.DISCORD_TOKEN = 'fake-token-123';
 
         vi.doMock('@sapphire/framework', () => ({
-            SapphireClient: function (opts: any) {
-                (globalThis as any).__sapphire_opts = opts;
-                this.login = function (token: string) {
-                    (globalThis as any).__sapphire_login_token = token;
-                    return Promise.resolve('ok');
-                };
-            },
+            SapphireClient: class {
+                constructor(opts: any) { (globalThis as any).__sapphire_opts = opts; }
+                login(token: string) { (globalThis as any).__sapphire_login_token = token; return Promise.resolve('ok'); }
+            } as any,
         }));
 
         await import('../src/index.js');
@@ -61,11 +62,7 @@ describe('src/index entrypoint', () => {
         }) as any));
 
         vi.doMock('@sapphire/framework', () => ({
-            SapphireClient: function (_opts: any) {
-                this.login = function () {
-                    return Promise.reject(new Error('auth failed'));
-                };
-            },
+            SapphireClient: class { login() { return Promise.reject(new Error('auth failed')); } } as any,
         }));
 
         await import('../src/index.js');

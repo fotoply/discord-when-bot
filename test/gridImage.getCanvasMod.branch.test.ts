@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { makeFakeCanvasModule } from './helpers.js';
 
 describe('gridImage getCanvasMod branches', () => {
   it('uses cached CanvasMod when already resolved (no override)', async () => {
@@ -58,5 +59,31 @@ describe('gridImage getCanvasMod branches', () => {
     } catch (err: any) {
       expect(String(err.message)).toMatch(/node-canvas is required/);
     }
+  });
+
+  it('throws when CanvasOverride is explicitly null', async () => {
+    vi.resetModules();
+    const mod = await import('../src/util/gridImage.js');
+    const { renderGridPng, __setCanvasModule } = mod as any;
+    // explicit null should make getCanvasMod return null and cause render to throw
+    __setCanvasModule(null);
+    expect(() => renderGridPng([[true]], { rowLabels: ['A'] })).toThrow(/node-canvas is required/);
+  });
+
+  it('throws when CanvasOverride does not provide createCanvas', async () => {
+    vi.resetModules();
+    const mod = await import('../src/util/gridImage.js');
+    const { renderGridPng, __setCanvasModule } = mod as any;
+    __setCanvasModule({});
+    expect(() => renderGridPng([[true]], { rowLabels: ['A'] })).toThrow(/node-canvas is required/);
+  });
+
+  it('uses provided override module when it has createCanvas', async () => {
+    vi.resetModules();
+    const mod = await import('../src/util/gridImage.js');
+    const { renderGridPng, __setCanvasModule } = mod as any;
+    __setCanvasModule(makeFakeCanvasModule());
+    const res = renderGridPng([[true]], { rowLabels: ['A'] });
+    expect(Buffer.isBuffer(res.buffer)).toBe(true);
   });
 });
