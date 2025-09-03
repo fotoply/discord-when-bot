@@ -152,4 +152,18 @@ describe('gridImage renderer (canvas path)', () => {
       else process.env.WHEN_REQUIRE_CANVAS = prev;
     }
   });
+
+  it('uses provided rowLabelWidth override and paints offColor for false cells', () => {
+    const matrix = [ [true, false] ];
+    const opts = { rowLabels: ['Z'], rowLabelWidth: 400, offColor: '#010203' } as any;
+    const { buffer, width } = renderGridPng(matrix, opts);
+    const png = PNG.sync.read(buffer as any);
+    expect(width).toBeGreaterThan(0);
+
+    const cellSize = 99, cellGap = 9, padding = 24, headerHeight = 72;
+    const xFalse = padding + opts.rowLabelWidth + 1 * (cellSize + cellGap) + 1;
+    const y = padding + headerHeight + 1;
+    const idx = (png.width * y + xFalse) << 2;
+    expect([png.data[idx], png.data[idx+1], png.data[idx+2], png.data[idx+3]]).toEqual([1,2,3,255]);
+  });
 });

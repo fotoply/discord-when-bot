@@ -5,7 +5,7 @@ import WhenCommandMod from '../src/commands/when.js';
 import PollCommandMod from '../src/commands/poll.js';
 import { vi } from 'vitest';
 
-export function makeFakeCanvasModule() {
+export function makeFakeCanvasModule(opts?: { spaceWidthZero?: boolean; imageThrows?: boolean; charScale?: number }) {
   function parseColor(c: string): [number, number, number, number] {
     if (typeof c === 'string' && c.startsWith('#')) {
       const h = c.slice(1);
@@ -18,6 +18,12 @@ export function makeFakeCanvasModule() {
     }
     return [255,255,255,255];
   }
+
+  const ImageClass = opts?.imageThrows
+    ? class { set src(_v: any) { throw new Error('bad image'); } }
+    : class { src: any };
+
+  const charScale = typeof opts?.charScale === 'number' ? opts!.charScale! : 0.6;
 
   return {
     createCanvas(width: number, height: number) {
@@ -32,7 +38,8 @@ export function makeFakeCanvasModule() {
         measureText: (text: string) => {
           const m = /\b(\d+)px\b/.exec(ctx.font as string);
           const px = m ? parseInt(m[1]!, 10) : 10;
-          const width = Math.ceil(text.length * (px * 0.6));
+          if (opts?.spaceWidthZero && text === ' ') return { width: 0 } as any;
+          const width = Math.ceil(text.length * (px * charScale));
           return { width } as any;
         },
         beginPath: () => {},
@@ -80,7 +87,7 @@ export function makeFakeCanvasModule() {
         },
       };
     },
-    Image: class { src: any }
+    Image: ImageClass
   };
 }
 
@@ -150,4 +157,3 @@ export class MockFramework {
     await this.bus.emitInteraction(interaction); return interaction;
   }
 }
-

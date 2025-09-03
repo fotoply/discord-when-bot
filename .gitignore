@@ -11,3 +11,6 @@ dist/
 *.db-shm
 coverage
 test-data/
+.stryker-tmp/
+reports/
+.github/copilot-instructions.md
