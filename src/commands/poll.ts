@@ -109,7 +109,7 @@ export default class PollCommand extends Command {
             let usedDefer = false;
             if (typeof interaction.deferReply === 'function') {
                 try {
-                    await interaction.deferReply();
+                    await interaction.deferReply({ephemeral: true});
                     usedDefer = true;
                 } catch (err) {
                     // ignore defer failure and fall back to replying later

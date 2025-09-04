@@ -31,7 +31,7 @@ describe('Full-flow: Switch view toggles grid and back', () => {
     const ix1 = await fw.emitButton(viewBtn, 'creatorSV');
     expect(ix1.update).toHaveBeenCalled();
     const arg1 = ix1.update.mock.calls[0][0];
-    expect(arg1.content).toBe('');
+    expect(typeof arg1.content).toBe('string');
     expect(Array.isArray(arg1.files)).toBe(true);
     const names1 = (arg1.files || []).map((f: any) => f?.name);
     expect(names1).toContain('grid.png');

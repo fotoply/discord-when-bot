@@ -36,7 +36,8 @@ describe('src/index entrypoint', () => {
 
         vi.doMock('@sapphire/framework', () => ({
             SapphireClient: class {
-                constructor(opts: any) { (globalThis as any).__sapphire_opts = opts; }
+                user: any;
+                constructor(opts: any) { (globalThis as any).__sapphire_opts = opts; this.user = { tag: 'bot#0001', id: '123' }; }
                 login(token: string) { (globalThis as any).__sapphire_login_token = token; return Promise.resolve('ok'); }
             } as any,
         }));
