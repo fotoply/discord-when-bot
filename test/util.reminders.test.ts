@@ -42,7 +42,9 @@ describe('util/reminders', () => {
 
     expect(deleteMock).toHaveBeenCalledWith('old-1');
     expect(sendMock).toHaveBeenCalledTimes(1);
-    const { content } = sendMock.mock.calls[0][0];
+    const firstCall = ((sendMock.mock.calls as unknown) as any[])[0] as any[];
+    const firstArg = firstCall[0] as any;
+    const { content } = firstArg;
     expect(content).toContain('Reminder:');
     expect(content).toContain('<@u2>');
     expect(content).not.toContain('<@u1>');
@@ -100,7 +102,9 @@ describe('util/reminders', () => {
     await sendReminders(client, Polls);
 
     expect(sendMock).toHaveBeenCalledTimes(1);
-    const { content } = sendMock.mock.calls[0][0];
+    const firstCall = ((sendMock.mock.calls as unknown) as any[])[0] as any[];
+    const firstArg = firstCall[0] as any;
+    const { content } = firstArg;
     expect(content).toContain('<@u2>');
     expect(content).not.toContain('<@u1>');
   });
@@ -189,8 +193,8 @@ describe('util/reminders', () => {
     expect(sendA).toHaveBeenCalledTimes(1);
     expect(sendB).toHaveBeenCalledTimes(1);
 
-    const contentA = sendA.mock.calls[0][0].content as string;
-    const contentB = sendB.mock.calls[0][0].content as string;
+    const contentA = (((sendA.mock.calls as unknown) as any[])[0] as any[])[0].content as string;
+    const contentB = (((sendB.mock.calls as unknown) as any[])[0] as any[])[0].content as string;
     expect(contentA).toContain('<@ua2>');
     expect(contentB).toContain('<@ub2>');
 
@@ -223,7 +227,9 @@ describe('util/reminders', () => {
     await sendReminders(client, Polls);
 
     expect(sendMock).toHaveBeenCalledTimes(1);
-    const { content } = sendMock.mock.calls[0][0];
+    const firstCall = ((sendMock.mock.calls as unknown) as any[])[0] as any[];
+    const firstArg = firstCall[0] as any;
+    const { content } = firstArg;
     expect(content).toContain('<@u2>');
     expect(setReminderMessageId).toHaveBeenCalledWith('p6', 'new-6');
   });

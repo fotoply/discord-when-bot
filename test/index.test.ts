@@ -120,7 +120,7 @@ describe('reminder logic', () => {
         expect(deleteMock).toHaveBeenCalledWith('old-msg');
         // Posts a single message mentioning only user2
         expect(sendMock).toHaveBeenCalledTimes(1);
-        const sentArg = sendMock.mock.calls[0][0];
+        const sentArg = (((sendMock.mock.calls as unknown) as any[])[0] as any[])[0] as any;
         expect(sentArg.content).toContain('<@user2>');
         expect(sentArg.content).toContain('Reminder:');
         // Persists new reminder message id

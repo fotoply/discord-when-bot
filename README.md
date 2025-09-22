@@ -9,6 +9,7 @@ A minimal Discord bot built with the Sapphire Framework that creates availabilit
 - Message includes a per-date list of responders and a combined list of all voters
 - Button clicks toggle availability and live-update counts and lists
 - Persistent polls backed by a local SQLite database (survive restarts)
+- Admin-only reminders: `/remind now` pings non-responders in the current channel; `/remind config` manages per-channel reminder settings (enable/disable and frequency)
 
 ## Prerequisites
 
@@ -56,13 +57,29 @@ When the bot is ready, you’ll see "Bot is ready." in your console.
 
 If the bot restarts, users can continue to interact with existing poll messages; state is loaded from SQLite on demand.
 
+### Reminders
+
+- The bot evaluates reminders every hour on the hour. Per-channel settings control whether a reminder is sent.
+- Admin command:
+  - `/remind now` — triggers a reminder in the current channel for any active polls, pinging only non-responders. If a previous reminder exists, it will be replaced.
+  - `/remind config` — shows current settings for this channel.
+  - `/remind config enabled:true|false` — enable or disable reminders for this channel.
+  - `/remind config interval_hours:<n>` — set minimum hours between reminders (integer, default 24).
+- Defaults per channel:
+  - enabled: true
+  - interval_hours: 24
+
 ## Data Persistence (SQLite)
 
 - The database is initialized on first run and stored at `./data/when.db` by default (configurable via `WHEN_DB_PATH`).
 - Schema:
-  - `polls(id, channel_id, creator_id, message_id, closed)`
+  - `polls(id, channel_id, creator_id, message_id, closed, view_mode, reminder_message_id)`
   - `poll_dates(poll_id, date)`
   - `poll_votes(poll_id, date, user_id)`
+  - `channel_config(guild_id, channel_id, key, value)` — generalized per-channel key/value configuration. Reminder keys used:
+    - `reminders.enabled` → `"true"|"false"` (default `"true"`)
+    - `reminders.intervalHours` → integer hours as string (default `"24"`)
+    - `reminders.lastSent` → epoch milliseconds as string (managed by the bot)
 - Foreign keys are enforced; writes are wrapped where useful for consistency.
 
 ### Quick smoke test (optional)
@@ -78,11 +95,15 @@ npm run smoke:load
 
 ## Configuration
 
-- `src/index.ts` boots the Sapphire client.
+- `src/index.ts` boots the Sapphire client and schedules hourly reminder checks (per-channel throttling is enforced by the reminders utility).
 - `src/commands/when.ts` defines the `/when` command and shows the dropdowns.
+- `src/commands/poll.ts` provides list/repost functionality and a context menu to reopen a poll.
+- `src/commands/remind.ts` adds `/remind now` and `/remind config` for admins.
 - `src/listeners/interactionCreate.ts` handles dropdowns, creates the poll, toggles, and message updates.
 - `src/store/polls.ts` implements a cache backed by SQLite persistence.
 - `src/store/sessions.ts` holds temporary per-user selection state during setup.
+- `src/store/config.ts` provides a generalized per-channel configuration helper for reminder settings (and future features).
+- `src/util/reminders.ts` computes non-responders and posts or replaces reminder messages per channel.
 - `src/util/date.ts` provides date validation, range building, and human-readable labels.
 
 ## Troubleshooting

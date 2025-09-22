@@ -45,6 +45,16 @@ db.exec(`
 
     CREATE INDEX IF NOT EXISTS idx_poll_votes_poll ON poll_votes (poll_id);
     CREATE INDEX IF NOT EXISTS idx_poll_votes_user ON poll_votes (user_id);
+
+    -- Generic per-channel configuration table (JSON string values)
+    CREATE TABLE IF NOT EXISTS channel_config
+    (
+        guild_id   TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        key        TEXT NOT NULL,
+        value      TEXT NOT NULL,
+        PRIMARY KEY (guild_id, channel_id, key)
+    );
 `);
 
 // Lightweight migration: ensure polls.view_mode exists

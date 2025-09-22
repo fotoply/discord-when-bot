@@ -14,7 +14,7 @@ if (!token) {
 }
 
 const client = new SapphireClient({
-    intents: [GatewayIntentBits.Guilds],
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
     partials: [Partials.Channel],
 });
 
@@ -27,30 +27,32 @@ client.login(token)
     process.exit(1);
 });
 
-// Schedule reminders once per day at 16:00 UTC
-function msUntilNextUtcTime(hour: number, minute = 0) {
+// Schedule reminders periodically; per-channel interval is enforced by util
+function msUntilNextUtcTopOfHour() {
     const now = new Date();
     const next = new Date(now);
-    next.setUTCHours(hour, minute, 0, 0);
-    if (next.getTime() < now.getTime()) {
-        next.setUTCDate(next.getUTCDate() + 1);
+    next.setUTCMinutes(0, 0, 0);
+    if (next.getTime() <= now.getTime()) {
+        next.setUTCHours(next.getUTCHours() + 1);
     }
     return next.getTime() - now.getTime();
 }
 
-function scheduleDailyRemindersAtUtc16() {
-    const delay = msUntilNextUtcTime(16, 0);
+function scheduleHourlyReminders() {
+    const initialDelay = msUntilNextUtcTopOfHour();
     setTimeout(() => {
-        // Fire and forget; internal errors are handled within utility
         // eslint-disable-next-line @typescript-eslint/no-floating-promises
         sendRemindersImpl(client as any, Polls).finally(() => {
-            // Schedule next run for the next day at 16:00 UTC
-            scheduleDailyRemindersAtUtc16();
+            setInterval(() => {
+                // Fire and forget hourly; util will skip channels not due
+                // eslint-disable-next-line @typescript-eslint/no-floating-promises
+                sendRemindersImpl(client as any, Polls);
+            }, 60 * 60 * 1000);
         });
-    }, delay);
+    }, initialDelay);
 }
 
-scheduleDailyRemindersAtUtc16();
+scheduleHourlyReminders();
 
 // Test helper: allow tests to call reminders without needing to construct real client/DB
 export async function sendReminders() {

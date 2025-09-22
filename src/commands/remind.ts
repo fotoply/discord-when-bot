@@ -1,0 +1,135 @@
+import { ApplyOptions } from "@sapphire/decorators";
+import { Command } from "@sapphire/framework";
+import type { ChatInputCommandInteraction } from "discord.js";
+import { Polls } from "../store/polls.js";
+import { sendReminders } from "../util/reminders.js";
+import { ReminderSettings } from "../store/config.js";
+
+@ApplyOptions<Command.Options>({
+  name: "remind",
+  description: "Admin: trigger reminders or configure per-channel reminder settings",
+})
+export default class RemindCommand extends Command {
+  public override registerApplicationCommands(registry: Command.Registry) {
+    registry.registerChatInputCommand(
+      (builder: any) =>
+        builder
+          .setName(this.name)
+          .setDescription(this.description ?? "Reminders")
+          .addSubcommand((s: any) =>
+            s.setName("now").setDescription("Trigger a reminder in this channel for active polls")
+          )
+          .addSubcommand((s: any) =>
+            s
+              .setName("config")
+              .setDescription("Show or update reminder settings for this channel")
+              .addStringOption((o: any) =>
+                o
+                  .setName("enabled")
+                  .setDescription("Enable or disable reminders (true/false or show)")
+                  .setRequired(false)
+                  .addChoices(
+                    { name: "show", value: "show" },
+                    { name: "true", value: "true" },
+                    { name: "false", value: "false" },
+                  )
+              )
+              .addIntegerOption((o: any) =>
+                o
+                  .setName("interval_hours")
+                  .setDescription("Minimum hours between reminders (>=1)")
+                  .setRequired(false)
+              )
+          ),
+      process.env.GUILD_ID ? { guildIds: [process.env.GUILD_ID] } : undefined,
+    );
+  }
+
+  private isAdmin(interaction: ChatInputCommandInteraction): boolean {
+    const member: any = interaction.member;
+    return !!(member && member.permissions && typeof member.permissions.has === "function" && member.permissions.has("Administrator"));
+  }
+
+  public override async chatInputRun(interaction: ChatInputCommandInteraction) {
+    const sub = interaction.options.getSubcommand();
+
+    if (!this.isAdmin(interaction)) {
+      await interaction.reply({ content: "Only an administrator can use this command.", ephemeral: true });
+      return;
+    }
+
+    if (!interaction.guild || !interaction.channel) {
+      await interaction.reply({ content: "This command must be used in a guild text channel.", ephemeral: true });
+      return;
+    }
+
+    const guildId = interaction.guild.id;
+    const channelId = (interaction.channel as any).id as string;
+
+    if (sub === "now") {
+      // Defer quickly (ephemeral) when possible to avoid 3s timeout, then trigger reminders without awaiting
+      let deferred = false;
+      if (typeof (interaction as any).deferReply === "function") {
+        try {
+          await interaction.deferReply({ ephemeral: true });
+          deferred = true;
+        } catch {}
+      }
+
+      // Fire-and-forget; force bypasses interval throttle for explicit admin-triggered reminders
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      sendReminders((this.container.client as any), Polls, { channelId, force: true }).catch(() => {});
+
+      if (deferred) {
+        await interaction.editReply({ content: "Triggered reminders for this channel (if needed)." });
+      } else {
+        await interaction.reply({ content: "Triggered reminders for this channel (if needed).", ephemeral: true });
+      }
+      return;
+    }
+
+    if (sub === "config") {
+      const enabledChoice = interaction.options.getString("enabled");
+      const intervalHours = interaction.options.getInteger("interval_hours") ?? undefined;
+
+      // If show or no options, just display current
+      if (!enabledChoice && intervalHours === undefined) {
+        const current = ReminderSettings.get(guildId, channelId);
+        await interaction.reply({
+          content: `Current reminder settings for this channel:\n- enabled: ${current.enabled}\n- intervalHours: ${current.intervalHours}${current.lastSent ? `\n- lastSent: ${new Date(current.lastSent).toISOString()}` : ""}`,
+          ephemeral: true,
+        });
+        return;
+      }
+
+      if (enabledChoice === "show") {
+        const current = ReminderSettings.get(guildId, channelId);
+        await interaction.reply({
+          content: `Current reminder settings for this channel:\n- enabled: ${current.enabled}\n- intervalHours: ${current.intervalHours}${current.lastSent ? `\n- lastSent: ${new Date(current.lastSent).toISOString()}` : ""}`,
+          ephemeral: true,
+        });
+        return;
+      }
+
+      if (enabledChoice === "true") {
+        ReminderSettings.setEnabled(guildId, channelId, true);
+      } else if (enabledChoice === "false") {
+        ReminderSettings.setEnabled(guildId, channelId, false);
+      }
+
+      if (intervalHours !== undefined) {
+        const hours = Math.max(1, Math.floor(intervalHours));
+        ReminderSettings.setIntervalHours(guildId, channelId, hours);
+      }
+
+      const updated = ReminderSettings.get(guildId, channelId);
+      await interaction.reply({
+        content: `Updated reminder settings:\n- enabled: ${updated.enabled}\n- intervalHours: ${updated.intervalHours}`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    await interaction.reply({ content: "Unknown subcommand.", ephemeral: true });
+  }
+}
