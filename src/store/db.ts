@@ -54,6 +54,10 @@ try {
     if (!hasViewMode) {
         db.exec("ALTER TABLE polls ADD COLUMN view_mode TEXT NOT NULL DEFAULT 'list'");
     }
+    const hasReminderMsg = cols.some((c) => c.name === "reminder_message_id");
+    if (!hasReminderMsg) {
+        db.exec("ALTER TABLE polls ADD COLUMN reminder_message_id TEXT");
+    }
 } catch (e) {
     // Best effort; tests will reveal if anything goes wrong
 }

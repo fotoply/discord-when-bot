@@ -12,6 +12,8 @@ export type Poll = {
     selections: Map<string, Set<string>>; // date -> users
     closed?: boolean;
     viewMode?: "list" | "grid";
+    // ID of the last reminder message posted in the channel, if any
+    reminderMessageId?: string;
 };
 
 class PollStore {
@@ -73,6 +75,17 @@ class PollStore {
             db.prepare("UPDATE polls SET message_id = ?, channel_id = ? WHERE id = ?").run(
                 messageId,
                 channelId,
+                pollId,
+            );
+        }
+    }
+
+    setReminderMessageId(pollId: string, messageId?: string) {
+        const poll = this.polls.get(pollId) ?? this.hydrate(pollId);
+        if (poll) {
+            poll.reminderMessageId = messageId;
+            db.prepare("UPDATE polls SET reminder_message_id = ? WHERE id = ?").run(
+                messageId ?? null,
                 pollId,
             );
         }
@@ -244,7 +257,7 @@ class PollStore {
         // Load a poll from DB
         const row = db
             .prepare(
-                "SELECT id, channel_id AS channelId, creator_id AS creatorId, message_id AS messageId, closed, COALESCE(view_mode, 'list') AS viewMode FROM polls WHERE id = ?",
+                "SELECT id, channel_id AS channelId, creator_id AS creatorId, message_id AS messageId, closed, COALESCE(view_mode, 'list') AS viewMode, reminder_message_id AS reminderMessageId FROM polls WHERE id = ?",
             )
             .get(pollId) as
             | {
@@ -254,6 +267,7 @@ class PollStore {
             messageId?: string;
             closed: number;
             viewMode?: "list" | "grid";
+            reminderMessageId?: string;
         }
             | undefined;
         if (!row) return undefined;
@@ -281,6 +295,7 @@ class PollStore {
             selections,
             closed: row.closed === 1,
             viewMode: row.viewMode ?? "list",
+            reminderMessageId: row.reminderMessageId ?? undefined,
         };
         this.polls.set(pollId, poll);
         return poll;
