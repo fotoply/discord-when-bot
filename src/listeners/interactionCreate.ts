@@ -11,6 +11,11 @@ import {Sessions} from "../store/sessions.js";
 import {buildDateRange, buildFutureDates, formatDateLabel, isValidISODate,} from "../util/date.js";
 import {buildPollMessage} from "../util/pollRender.js";
 
+function log(...args: any[]) {
+    // eslint-disable-next-line no-console
+    console.log('[interact]', ...args);
+}
+
 // Type guards for narrowing Interaction to specific interaction types
 function isModalSubmitInteraction(i: Interaction): i is import('discord.js').ModalSubmitInteraction {
     return typeof (i as any).isModalSubmit === 'function' && (i as any).isModalSubmit();
@@ -103,34 +108,41 @@ export default class InteractionCreateListener extends Listener<
     public async run(interaction: Interaction) {
         // Use type guard functions to narrow the interaction type for TypeScript
         if (isModalSubmitInteraction(interaction) && interaction.customId === "when:date-range") {
+            log('modal: date-range submitted by', (interaction as any)?.user?.id ?? 'unknown');
             await this.handleDateRangeModal(interaction);
             return;
         }
 
         if (isButtonInteraction(interaction)) {
             if (interaction.customId.startsWith("when:toggle:")) {
+                log('button: toggle', interaction.customId, 'by', (interaction as any)?.user?.id ?? 'unknown');
                 await this.handleToggle(interaction);
                 return;
             }
             if (interaction.customId.startsWith("when:toggleAll:")) {
+                log('button: toggleAll', interaction.customId, 'by', (interaction as any)?.user?.id ?? 'unknown');
                 await this.handleToggleAll(interaction);
                 return;
             }
             if (interaction.customId.startsWith("when:view:")) {
+                log('button: view', interaction.customId, 'by', (interaction as any)?.user?.id ?? 'unknown');
                 await this.handleViewToggle(interaction);
                 return;
             }
             if (interaction.customId.startsWith("when:close:")) {
+                log('button: close', interaction.customId, 'by', (interaction as any)?.user?.id ?? 'unknown');
                 await this.handleClose(interaction);
                 return;
             }
         }
 
         if (isStringSelectInteraction(interaction) && interaction.customId === "when:first") {
+            log('select: first', interaction.values?.[0], 'by', (interaction as any)?.user?.id ?? 'unknown');
             await this.handleFirstSelect(interaction);
             return;
         }
         if (isStringSelectInteraction(interaction) && interaction.customId === "when:last") {
+            log('select: last', interaction.values?.[0], 'by', (interaction as any)?.user?.id ?? 'unknown');
             await this.handleLastSelect(interaction);
             return;
         }
@@ -141,6 +153,7 @@ export default class InteractionCreateListener extends Listener<
         const lastRaw = interaction.fields.getTextInputValue("last-date")?.trim();
 
         if (!isValidISODate(firstRaw) || !isValidISODate(lastRaw)) {
+            log('modal: invalid ISO dates', firstRaw, lastRaw);
             await interaction.reply({
                 content: "Please use valid dates in the form YYYY-MM-DD.",
                 ephemeral: true,
@@ -150,6 +163,7 @@ export default class InteractionCreateListener extends Listener<
 
         const dates = buildDateRange(firstRaw, lastRaw);
         if (!dates) {
+            log('modal: invalid order', firstRaw, lastRaw);
             await interaction.reply({
                 content: "First date must be on or before last date.",
                 ephemeral: true,
@@ -158,6 +172,7 @@ export default class InteractionCreateListener extends Listener<
         }
 
         if (dates.length === 0) {
+            log('modal: empty range');
             await interaction.reply({
                 content: "No dates in range.",
                 ephemeral: true,
@@ -166,6 +181,7 @@ export default class InteractionCreateListener extends Listener<
         }
 
         if (dates.length > 20) {
+            log('modal: range too large', dates.length);
             await interaction.reply({
                 content: "Date range too large. Please choose 20 days or fewer.",
                 ephemeral: true,
@@ -178,6 +194,7 @@ export default class InteractionCreateListener extends Listener<
             creatorId: interaction.user.id,
             dates,
         });
+        log('modal: created poll', poll.id, 'dates=', dates.length, 'channel=', interaction.channelId ?? 'unknown');
 
         const extras = await this.buildGridExtras(poll, interaction);
         const message = buildPollMessage(poll, extras);
@@ -186,6 +203,7 @@ export default class InteractionCreateListener extends Listener<
 
         const replyMsg = await interaction.fetchReply();
         Polls.setMessageId(poll.id, replyMsg.id);
+        log('modal: set message id', replyMsg.id, 'for poll', poll.id);
 
         await interaction
             .followUp({content: "Poll created!", ephemeral: true})
@@ -198,6 +216,7 @@ export default class InteractionCreateListener extends Listener<
         if (!first) return;
 
         Sessions.setFirst(interaction.user.id, first);
+        log('first-select: set for user', interaction.user.id, 'to', first);
 
         const future = buildFutureDates(20);
         const filtered = future.filter((d) => d >= first);
@@ -240,6 +259,7 @@ export default class InteractionCreateListener extends Listener<
         const first = Sessions.getFirst(interaction.user.id);
 
         if (!first) {
+            log('last-select: missing first for user', interaction.user.id);
             await interaction.reply({
                 content: "Please pick the first date first.",
                 ephemeral: true,
@@ -248,6 +268,7 @@ export default class InteractionCreateListener extends Listener<
         }
 
         if (!last || last < first) {
+            log('last-select: invalid order', first, last);
             await interaction.reply({
                 content: "Last date must be the same or after the first date.",
                 ephemeral: true,
@@ -257,11 +278,13 @@ export default class InteractionCreateListener extends Listener<
 
         const dates = buildDateRange(first, last);
         if (!dates || dates.length === 0) {
+            log('last-select: invalid range after build');
             await interaction.reply({content: "Invalid range.", ephemeral: true});
             return;
         }
 
         if (dates.length > 20) {
+            log('last-select: range too large', dates.length);
             await interaction.reply({
                 content: "Date range too large. Please choose 20 days or fewer.",
                 ephemeral: true,
@@ -270,6 +293,7 @@ export default class InteractionCreateListener extends Listener<
         }
 
         if (!interaction.inGuild() || !interaction.channel?.isTextBased()) {
+            log('last-select: no text channel');
             await interaction.reply({
                 content: "Cannot determine a text channel to post in.",
                 ephemeral: true,
@@ -282,10 +306,12 @@ export default class InteractionCreateListener extends Listener<
             creatorId: interaction.user.id,
             dates,
         });
+        log('last-select: created poll', poll.id, 'channel', interaction.channel.id);
         const extras = await this.buildGridExtras(poll, interaction);
         const messageOpts = buildPollMessage(poll, extras);
 
         const message = await (interaction.channel as any).send(messageOpts as any);
+        log('last-select: posted message', (message as any)?.id ?? 'unknown', 'for poll', poll.id);
 
         Polls.setMessageId(poll.id, message.id);
 
@@ -301,6 +327,7 @@ export default class InteractionCreateListener extends Listener<
 
         const poll = pollId ? Polls.get(pollId) : null;
         if (!poll) {
+            log('toggle: poll not found', pollId);
             await interaction.reply({content: "Poll not found.", ephemeral: true});
             return;
         }
@@ -309,6 +336,7 @@ export default class InteractionCreateListener extends Listener<
                 content: "This poll is closed.",
                 ephemeral: true,
             });
+            log('toggle: poll closed', poll.id);
             return;
         }
 
@@ -317,6 +345,7 @@ export default class InteractionCreateListener extends Listener<
                 content: "Invalid button payload.",
                 ephemeral: true,
             });
+            log('toggle: invalid payload');
             return;
         }
 
@@ -326,12 +355,14 @@ export default class InteractionCreateListener extends Listener<
                 content: "Poll not found or invalid date.",
                 ephemeral: true,
             });
+            log('toggle: invalid date or poll');
             return;
         }
 
         const updated = Polls.get(poll.id)!;
         const extras = await this.buildGridExtras(updated, interaction);
         await interaction.update(buildPollMessage(updated, extras) as any);
+        log('toggle: updated poll', poll.id, 'user', interaction.user.id, 'date', date);
     }
 
     private async handleToggleAll(interaction: ButtonInteraction) {
@@ -341,6 +372,7 @@ export default class InteractionCreateListener extends Listener<
         const poll = pollId ? Polls.get(pollId) : null;
         if (!poll) {
             await interaction.reply({content: "Poll not found.", ephemeral: true});
+            log('toggleAll: poll not found', pollId);
             return;
         }
         if (poll.closed) {
@@ -348,6 +380,7 @@ export default class InteractionCreateListener extends Listener<
                 content: "This poll is closed.",
                 ephemeral: true,
             });
+            log('toggleAll: poll closed', poll.id);
             return;
         }
 
@@ -357,12 +390,14 @@ export default class InteractionCreateListener extends Listener<
                 content: "Could not toggle all.",
                 ephemeral: true,
             });
+            log('toggleAll: failed');
             return;
         }
 
         const updated = Polls.get(poll.id)!;
         const extras = await this.buildGridExtras(updated, interaction);
         await interaction.update(buildPollMessage(updated, extras) as any);
+        log('toggleAll: updated poll', poll.id, 'user', interaction.user.id);
     }
 
     private async handleViewToggle(interaction: ButtonInteraction) {
@@ -372,6 +407,7 @@ export default class InteractionCreateListener extends Listener<
         const poll = pollId ? Polls.get(pollId) : null;
         if (!poll) {
             await interaction.reply({content: "Poll not found.", ephemeral: true});
+            log('view: poll not found', pollId);
             return;
         }
         if (poll.closed) {
@@ -379,6 +415,7 @@ export default class InteractionCreateListener extends Listener<
                 content: "This poll is closed.",
                 ephemeral: true,
             });
+            log('view: poll closed', poll.id);
             return;
         }
 
@@ -388,6 +425,7 @@ export default class InteractionCreateListener extends Listener<
         if (newMode) updated.viewMode = newMode;
         const extras = await this.buildGridExtras(updated, interaction);
         await interaction.update(buildPollMessage(updated, extras) as any);
+        log('view: toggled view mode for poll', poll.id, 'to', newMode ?? updated.viewMode);
     }
 
     private async handleClose(interaction: ButtonInteraction) {
@@ -397,6 +435,7 @@ export default class InteractionCreateListener extends Listener<
         const poll = pollId ? Polls.get(pollId) : null;
         if (!poll) {
             await interaction.reply({content: "Poll not found.", ephemeral: true});
+            log('close: poll not found', pollId);
             return;
         }
 
@@ -414,19 +453,21 @@ export default class InteractionCreateListener extends Listener<
                     content: "Only the poll creator can close this poll.",
                     ephemeral: true,
                 });
+                log('close: forbidden for user', interaction.user.id, 'poll', poll.id);
                 return;
             }
         }
 
         if (poll.closed) {
             await interaction.reply({ content: "Poll is already closed.", ephemeral: true });
+            log('close: already closed', poll.id);
             return;
         }
 
         Polls.close(poll.id);
         const updated = Polls.get(poll.id)!;
-        // Show both list and grid view on closed poll
         const extras = await this.buildGridExtras(updated, interaction);
         await interaction.update(buildPollMessage(updated, extras) as any);
+        log('close: closed poll', poll.id);
     }
 }

@@ -4,6 +4,11 @@ import type {ChatInputCommandInteraction} from "discord.js";
 import {ActionRowBuilder, StringSelectMenuBuilder} from "discord.js";
 import {buildFutureDates, formatDateLabel} from "../util/date.js";
 
+function log(...args: any[]) {
+    // eslint-disable-next-line no-console
+    console.log('[when]', ...args);
+}
+
 @ApplyOptions<Command.Options>({
     name: "when",
     description: "Create an availability poll by date range",
@@ -21,6 +26,7 @@ export default class WhenCommand extends Command {
 
     public override async chatInputRun(interaction: ChatInputCommandInteraction) {
         const isoDates = buildFutureDates(20);
+        log(`invoke: guild=${interaction.guildId ?? 'dm'} channel=${(interaction.channel as any)?.id ?? 'unknown'} dates=${isoDates.length}`);
 
         const firstSelect = new StringSelectMenuBuilder()
             .setCustomId("when:first")
@@ -54,5 +60,6 @@ export default class WhenCommand extends Command {
             components: [row1, row2],
             ephemeral: true,
         });
+        log('replied with range selectors');
     }
 }

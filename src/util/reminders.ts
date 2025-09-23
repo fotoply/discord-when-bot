@@ -1,11 +1,10 @@
 import type {Client, GuildMember, SendableChannels, TextBasedChannel} from "discord.js";
 import { ReminderSettings } from "../store/config.js";
 
-function dbg(...args: any[]) {
-    if (process.env.WHEN_DEBUG_REMINDERS) {
-        // eslint-disable-next-line no-console
-        console.log("[reminders]", ...args);
-    }
+function log(...args: any[]) {
+    // Always log reminders activity by default
+    // eslint-disable-next-line no-console
+    console.log("[reminders]", ...args);
 }
 
 export type SendRemindersOptions = {
@@ -57,14 +56,15 @@ function isDueAtThisTick(now: Date, start: { h: number; m: number }, intervalHou
 
 export async function sendReminders(client: Client, Polls: any, options?: SendRemindersOptions) {
     const openPolls = Polls.allOpen();
+    log(`Scanning ${openPolls.length} open polls${options?.channelId ? ` (channelId=${options.channelId})` : ''}${options?.force ? ' [force]' : ''}.`);
     for (const poll of openPolls) {
         if (options?.channelId && poll.channelId !== options.channelId) continue;
         try {
-            const channel = await client.channels.fetch(poll.channelId).catch((e) => { dbg(`fetch channel failed for ${poll.channelId}:`, e?.message ?? e); return null; }) as any;
-            if (!channel || !("messages" in channel) || typeof channel.send !== 'function') { dbg(`skip poll ${poll.id}: channel not sendable`); continue; }
+            const channel = await client.channels.fetch(poll.channelId).catch((e) => { log(`fetch channel failed for ${poll.channelId}:`, e?.message ?? e); return null; }) as any;
+            if (!channel || !("messages" in channel) || typeof channel.send !== 'function') { log(`skip poll ${poll.id}: channel not sendable`); continue; }
 
             const guild = (channel as any).guild;
-            if (!guild) { dbg(`skip poll ${poll.id}: no guild on channel`); continue; }
+            if (!guild) { log(`skip poll ${poll.id}: no guild on channel`); continue; }
 
             // Per-channel reminders configuration; guard against missing ids in tests/mocks
             const guildId: string | undefined = typeof guild.id === 'string' ? guild.id : undefined;
@@ -80,31 +80,34 @@ export async function sendReminders(client: Client, Polls: any, options?: SendRe
                 intervalHours = cfg.intervalHours;
                 lastSent = cfg.lastSent;
                 startTime = cfg.startTime;
+                log(`poll ${poll.id}: cfg enabled=${enabled} interval=${intervalHours}h start=${startTime ?? 'unset'} lastSent=${lastSent ?? 'unset'}`);
             }
 
-            if (!enabled && !options?.force) { dbg(`skip poll ${poll.id}: disabled via config`); continue; }
+            if (!enabled && !options?.force) { log(`skip poll ${poll.id}: disabled via config`); continue; }
 
             if (!options?.force) {
                 const now = new Date();
                 const start = parseStart(startTime);
                 if (start) {
                     if (!isDueAtThisTick(now, start, intervalHours, lastSent)) {
-                        dbg(`skip poll ${poll.id}: not due for start=${startTime} interval=${intervalHours}h`);
+                        log(`skip poll ${poll.id}: not due for start=${startTime} interval=${intervalHours}h`);
                         continue;
                     }
                 } else {
                     if (lastSent && Date.now() - lastSent < intervalHours * 60 * 60 * 1000) {
-                        dbg(`skip poll ${poll.id}: interval not elapsed (${intervalHours}h)`);
+                        log(`skip poll ${poll.id}: interval not elapsed (${intervalHours}h)`);
                         continue;
                     }
                 }
+            } else {
+                log(`force sending reminders for poll ${poll.id}`);
             }
 
             // Ensure members cache is populated
             try {
                 await guild.members.fetch?.();
             } catch (e) {
-                dbg(`members.fetch failed:`, (e as any)?.message ?? e);
+                log(`members.fetch failed:`, (e as any)?.message ?? e);
             }
             const cache = guild.members.cache as Map<string, GuildMember> | any;
 
@@ -122,23 +125,23 @@ export async function sendReminders(client: Client, Polls: any, options?: SendRe
                 if (responded.has((member as any).id)) continue;
                 toPing.push((member as any).id);
             }
-            dbg(`poll ${poll.id}: toPing=${toPing.length}`);
+            log(`poll ${poll.id}: toPing=${toPing.length}`);
 
             // If there's an old reminder, try to delete it regardless
             if (poll.reminderMessageId) {
-                try { await (channel as TextBasedChannel & any).messages.delete(poll.reminderMessageId); dbg(`deleted previous reminder ${poll.reminderMessageId}`); } catch (e) { dbg(`delete previous reminder failed:`, (e as any)?.message ?? e); }
+                try { await (channel as TextBasedChannel & any).messages.delete(poll.reminderMessageId); log(`deleted previous reminder ${poll.reminderMessageId}`); } catch (e) { log(`delete previous reminder failed:`, (e as any)?.message ?? e); }
                 Polls.setReminderMessageId(poll.id, undefined);
             }
 
             // If nobody to ping, skip sending a new reminder
-            if (toPing.length === 0) { dbg(`skip poll ${poll.id}: no members to ping`); continue; }
+            if (toPing.length === 0) { log(`skip poll ${poll.id}: no members to ping`); continue; }
 
             // Build a single message with mentions
             const mentions = toPing.map((id) => `<@${id}>`).join(' ');
             const content = `Reminder: please respond to the poll${poll.messageId ? ' above' : ''}. ${mentions}`;
 
             const sent = await (channel as SendableChannels).send({ content });
-            dbg(`sent reminder message ${ (sent as any).id } for poll ${poll.id}`);
+            log(`sent reminder message ${ (sent as any).id } for poll ${poll.id}`);
             Polls.setReminderMessageId(poll.id, (sent as any).id);
 
             // Persist lastSent only when a reminder is actually sent
@@ -147,7 +150,7 @@ export async function sendReminders(client: Client, Polls: any, options?: SendRe
             }
         } catch (err) {
             // Ignore errors per poll to avoid blocking others
-            dbg(`error for poll ${poll.id}:`, (err as any)?.message ?? err);
+            log(`error for poll ${poll.id}:`, (err as any)?.message ?? err);
         }
     }
 }

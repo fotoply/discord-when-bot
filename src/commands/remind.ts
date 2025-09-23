@@ -5,6 +5,11 @@ import { Polls } from "../store/polls.js";
 import { sendReminders } from "../util/reminders.js";
 import { ReminderSettings } from "../store/config.js";
 
+function log(...args: any[]) {
+  // eslint-disable-next-line no-console
+  console.log("[remind]", ...args);
+}
+
 @ApplyOptions<Command.Options>({
   name: "remind",
   description: "Admin: trigger reminders or configure per-channel reminder settings",
@@ -82,6 +87,7 @@ export default class RemindCommand extends Command {
         } catch {}
       }
 
+      log(`now: guild=${guildId} channel=${channelId} force=true`);
       // Fire-and-forget; force bypasses interval throttle for explicit admin-triggered reminders
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       sendReminders((this.container.client as any), Polls, { channelId, force: true }).catch(() => {});
@@ -102,6 +108,7 @@ export default class RemindCommand extends Command {
       // If show or no options, just display current
       if (!enabledChoice && intervalHours === undefined && !startTime) {
         const current = ReminderSettings.get(guildId, channelId);
+        log(`config show: guild=${guildId} channel=${channelId} enabled=${current.enabled} interval=${current.intervalHours}h start=${current.startTime ?? 'unset'}`);
         await interaction.reply({
           content: `Current reminder settings for this channel:\n- enabled: ${current.enabled}\n- intervalHours: ${current.intervalHours}${current.startTime ? `\n- startTime: ${current.startTime} (UTC)` : ""}${current.lastSent ? `\n- lastSent: ${new Date(current.lastSent).toISOString()}` : ""}`,
           ephemeral: true,
@@ -111,6 +118,7 @@ export default class RemindCommand extends Command {
 
       if (enabledChoice === "show" || startTime === "show") {
         const current = ReminderSettings.get(guildId, channelId);
+        log(`config show: guild=${guildId} channel=${channelId} enabled=${current.enabled} interval=${current.intervalHours}h start=${current.startTime ?? 'unset'}`);
         await interaction.reply({
           content: `Current reminder settings for this channel:\n- enabled: ${current.enabled}\n- intervalHours: ${current.intervalHours}${current.startTime ? `\n- startTime: ${current.startTime} (UTC)` : ""}${current.lastSent ? `\n- lastSent: ${new Date(current.lastSent).toISOString()}` : ""}`,
           ephemeral: true,
@@ -148,6 +156,7 @@ export default class RemindCommand extends Command {
       }
 
       const updated = ReminderSettings.get(guildId, channelId);
+      log(`config update: guild=${guildId} channel=${channelId} enabled=${updated.enabled} interval=${updated.intervalHours}h start=${updated.startTime ?? 'unset'}`);
       await interaction.reply({
         content: `Updated reminder settings:\n- enabled: ${updated.enabled}\n- intervalHours: ${updated.intervalHours}${updated.startTime ? `\n- startTime: ${updated.startTime} (UTC)` : ""}`,
         ephemeral: true,

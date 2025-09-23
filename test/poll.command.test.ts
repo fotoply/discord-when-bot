@@ -15,6 +15,7 @@ vi.mock('@sapphire/framework', () => ({
 
 describe('Poll command', () => {
     it('/poll list shows open polls', async () => {
+        const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
         const poll = Polls.createPoll({channelId: 'chan-list', creatorId: 'creatorL', dates: ['2025-08-30']});
 
         const fakeCmd: any = {}; // no container needed for list
@@ -31,6 +32,10 @@ describe('Poll command', () => {
         expect(interaction.reply).toHaveBeenCalled();
         const arg = interaction.reply.mock.calls[0][0];
         expect(arg.content).toContain(poll.id);
+
+        const hadPollLog = (logSpy.mock.calls as any[]).some((args) => args[0] === '[poll]');
+        expect(hadPollLog).toBe(true);
+        logSpy.mockRestore();
     });
 
     it('/poll repost rejects non-creator', async () => {
@@ -57,6 +62,7 @@ describe('Poll command', () => {
     });
 
     it('/poll repost deletes old message and posts in target channel', async () => {
+        const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
         const poll = Polls.createPoll({channelId: 'old-chan', creatorId: 'creatorP', dates: ['2025-08-30']});
         // set an existing message id to be deleted
         Polls.setMessageId(poll.id, 'old-msg');
@@ -99,6 +105,10 @@ describe('Poll command', () => {
 
         const replyArg = interaction.reply.mock.calls[0][0];
         expect(replyArg.content).toContain(poll.id);
+
+        const hadPollLog = (logSpy.mock.calls as any[]).some((args) => args[0] === '[poll]');
+        expect(hadPollLog).toBe(true);
+        logSpy.mockRestore();
     });
 
     it('/poll repost when no previous message exists posts and updates', async () => {

@@ -4,6 +4,11 @@ import type {Channel, ChatInputCommandInteraction} from "discord.js";
 import {Polls} from "../store/polls.js";
 import {componentsFor, renderPollContent} from "../util/pollRender.js";
 
+function log(...args: any[]) {
+    // eslint-disable-next-line no-console
+    console.log('[poll]', ...args);
+}
+
 @ApplyOptions<Command.Options>({
     name: "poll",
     description: "Manage polls (list, repost)",
@@ -36,8 +41,10 @@ export default class PollCommand extends Command {
 
     public override async chatInputRun(interaction: ChatInputCommandInteraction) {
         const sub = interaction.options.getSubcommand();
+        log(`invoke: sub=${sub} guild=${interaction.guildId ?? 'dm'} channel=${(interaction.channel as any)?.id ?? 'unknown'}`);
         if (sub === "list") {
             const open = Polls.allOpen();
+            log(`list: open=${open.length}`);
             if (open.length === 0) {
                 await interaction.reply({content: "No open polls.", ephemeral: true});
                 return;
@@ -50,6 +57,7 @@ export default class PollCommand extends Command {
         if (sub === "repost") {
             const id = interaction.options.getString("id", true);
             const target = interaction.options.getChannel("channel");
+            log(`repost: id=${id} target=${(target as any)?.id ?? (interaction.channel as any)?.id ?? 'none'}`);
 
             const poll = Polls.get(id);
             if (!poll) {
@@ -84,10 +92,10 @@ export default class PollCommand extends Command {
                     const oldChannel = await this.container.client.channels.fetch(poll.channelId as string).catch(() => null);
                     if (oldChannel && (oldChannel as any).isTextBased && typeof (oldChannel as any).isTextBased === "function") {
                         const oldMsg = await (oldChannel as any).messages.fetch(poll.messageId).catch(() => null);
-                        if (oldMsg) await oldMsg.delete().catch(() => {});
+                        if (oldMsg) { await oldMsg.delete().catch(() => {}); log(`repost: deleted old message ${poll.messageId}`); }
                     }
-                } catch (err) {
-                    // ignore
+                } catch (err: any) {
+                    log(`repost: delete old failed:`, err?.message ?? err);
                 }
             }
 
@@ -95,6 +103,7 @@ export default class PollCommand extends Command {
 
             // Update stored channel and message id
             Polls.setMessageIdAndChannel(poll.id, (textChannel as any).id, message.id);
+            log(`repost: posted poll=${poll.id} msg=${message.id} channel=${(textChannel as any).id}`);
 
             await interaction.reply({content: `Poll ${poll.id} re-posted.`, ephemeral: true});
             return;
@@ -105,7 +114,6 @@ export default class PollCommand extends Command {
 
     public override async messageRun(interaction: any) {
         try {
-            // If the interaction supports deferring (real Discord interaction), defer to avoid the 3s timeout.
             let usedDefer = false;
             if (typeof interaction.deferReply === 'function') {
                 try {
@@ -115,9 +123,8 @@ export default class PollCommand extends Command {
                     // ignore defer failure and fall back to replying later
                 }
             }
-            // Sapphire passes the interaction as a MessageContextMenuCommandInteraction
             const message = interaction.targetMessage;
-            // Use public API to find poll by message ID (will hydrate from DB if needed)
+            log(`reopen: messageId=${message?.id ?? 'unknown'} guild=${interaction.guildId ?? 'dm'} channel=${(interaction.channel as any)?.id ?? 'unknown'}`);
             const foundPoll = Polls.findByMessageId(message.id);
             if (!foundPoll) {
                 if (usedDefer && typeof interaction.editReply === 'function') {
@@ -135,7 +142,6 @@ export default class PollCommand extends Command {
                 }
                 return;
             }
-            // Admin check
             const member = interaction.member;
             const isAdmin = !!(
                 member &&
@@ -150,10 +156,9 @@ export default class PollCommand extends Command {
 
             // Mark poll open in store
             Polls.reopen(foundPoll.id);
+            log(`reopen: poll=${foundPoll.id} byUser=${interaction.user?.id ?? 'unknown'}`);
 
-            // Try to update the original poll message in-place (do not create a new message)
             try {
-                // Resolve a client instance robustly (tests may invoke without a real Command instance)
                 const client = (this as any)?.container?.client ?? (interaction as any)?.client;
                 const channels = client?.channels;
                 if (channels && typeof channels.fetch === 'function') {
@@ -162,11 +167,12 @@ export default class PollCommand extends Command {
                         const oldMsg = await (oldChannel as any).messages.fetch(foundPoll.messageId as string).catch(() => null);
                         if (oldMsg) {
                             await oldMsg.edit({content: renderPollContent(foundPoll), components: componentsFor(foundPoll)}).catch(() => {});
+                            log(`reopen: edited original message ${foundPoll.messageId}`);
                         }
                     }
                 }
             } catch (err) {
-                // ignore errors editing the original message
+                // ignore errors editing original message
             }
 
             if (usedDefer && typeof interaction.editReply === 'function') {
@@ -175,7 +181,6 @@ export default class PollCommand extends Command {
                 await interaction.reply({content: `Poll ${foundPoll.id} has been reopened.`, ephemeral: true});
             }
         } catch (err: any) {
-            // Log the error and ensure the interaction receives a response so Discord doesn't show "The application did not respond"
             console.error('Error handling Reopen poll context menu:', err);
             try {
                 if (typeof interaction.editReply === 'function' && (interaction.deferred || interaction.replied)) {

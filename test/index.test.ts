@@ -83,6 +83,9 @@ describe('reminder logic', () => {
         // Avoid real login side-effects
         vi.doMock('@sapphire/framework', () => ({ SapphireClient: class { user = { tag: 'bot#0001', id: '123' }; constructor(_opts: any) {} login() { return Promise.resolve('ok'); } } as any }));
 
+        // Spy console.log to verify logging from reminders
+        const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
         // Mock Polls.allOpen with prior reminder id
         const poll = {
             id: 'poll1',
@@ -126,7 +129,12 @@ describe('reminder logic', () => {
         // Persists new reminder message id
         expect(setReminderMessageId).toHaveBeenCalledWith('poll1', 'new-msg');
 
+        // Verify log output includes [reminders] sent message
+        const hadRemindersLog = (logSpy.mock.calls as any[]).some((args) => args[0] === '[reminders]' && String(args[1]).includes('sent reminder message'));
+        expect(hadRemindersLog).toBe(true);
+
         // Cleanup
+        logSpy.mockRestore();
         delete process.env.DISCORD_TOKEN;
         vi.unmock('@sapphire/framework');
     });

@@ -9,8 +9,12 @@ vi.mock('@sapphire/framework', () => ({
 }));
 
 describe('When command', () => {
-    it('replies with two select components and uses date labels', async () => {
+    it('replies with two select components and uses date labels, and logs activity', async () => {
+        const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
         const interaction: any = {
+            guildId: 'g-when',
+            channel: { id: 'c-when' },
             reply: vi.fn().mockResolvedValue(undefined),
         };
 
@@ -23,6 +27,11 @@ describe('When command', () => {
         expect(Array.isArray(arg.components)).toBe(true);
         // there should be two rows (first and last)
         expect(arg.components.length).toBe(2);
+
+        // Should have logged with the [when] prefix
+        const hadWhenLog = (logSpy.mock.calls as any[]).some((args) => args[0] === '[when]');
+        expect(hadWhenLog).toBe(true);
+
+        logSpy.mockRestore();
     });
 });
-
