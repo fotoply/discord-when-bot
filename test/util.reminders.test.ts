@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // We import the util directly and pass mocks; no need to mock dotenv or framework here
 import { sendReminders } from '../src/util/reminders.js';
+import { ReminderSettings, ChannelConfig } from '../src/store/config.js';
 
 function makeSelections(respondedIds: string[] = [], includeNone = true) {
   const map = new Map<string, Set<string>>();
@@ -264,5 +265,74 @@ describe('util/reminders', () => {
     expect(sendMock).toHaveBeenCalledTimes(1);
     expect(setReminderMessageId).toHaveBeenCalledWith('p7', undefined);
     expect(setReminderMessageId).toHaveBeenCalledWith('p7', 'new-7');
+  });
+
+  it('respects start_time schedule and interval, sending only on due ticks', async () => {
+    // Turn on debug logs for this test
+    const prev = process.env.WHEN_DEBUG_REMINDERS;
+    process.env.WHEN_DEBUG_REMINDERS = '1';
+
+    // Freeze time control
+    vi.useFakeTimers();
+    const base = new Date(Date.UTC(2025, 0, 1, 9, 0, 0, 0)); // 2025-01-01 09:00Z
+    vi.setSystemTime(base);
+
+    const guildId = 'g-time';
+    const chanId = 'c-time';
+
+    // Clean config for this channel
+    for (const key of ['reminders.enabled','reminders.intervalHours','reminders.lastSent','reminders.startTime']) {
+      ChannelConfig.delete(guildId, chanId, key);
+    }
+    // Set enabled and schedule
+    ReminderSettings.setEnabled(guildId, chanId, true);
+    ReminderSettings.setStartTime(guildId, chanId, '10:00');
+    ReminderSettings.setIntervalHours(guildId, chanId, 12);
+
+    const poll = {
+      id: 'pt',
+      channelId: chanId,
+      messageId: 'poll-msg',
+      selections: makeSelections(['u1']),
+      reminderMessageId: undefined,
+    };
+    const setReminderMessageId = vi.fn();
+    const Polls = { allOpen: vi.fn(() => [poll]), setReminderMessageId } as any;
+
+    const sendMock = vi.fn(() => Promise.resolve({ id: 'new-time-1' }));
+    const deleteMock = vi.fn(() => Promise.resolve());
+
+    const members = new Map<string, any>([
+      ['u1', { id: 'u1', user: { bot: false } }], // responded
+      ['u2', { id: 'u2', user: { bot: false } }], // non-responder
+    ]);
+    const guild = { id: guildId, members: { cache: members, fetch: vi.fn() } };
+    const channel = { id: chanId, guild, send: sendMock, messages: { delete: deleteMock } } as any;
+    const client = { channels: { fetch: vi.fn(() => Promise.resolve(channel)) } } as any;
+
+    // Not due at 09:00 (before the first slot 10:00)
+    await sendReminders(client, Polls);
+    expect(sendMock).not.toHaveBeenCalled();
+
+    // Advance to exactly 10:00 UTC -> should send
+    vi.setSystemTime(new Date(Date.UTC(2025, 0, 1, 10, 0, 0, 0)));
+    await sendReminders(client, Polls);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(setReminderMessageId).toHaveBeenCalledWith('pt', 'new-time-1');
+
+    // Calling again at 10:00 shouldn't send twice (lastSent gate)
+    await sendReminders(client, Polls);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+
+    // Advance to 22:00 UTC (12h later) -> should send again
+    vi.setSystemTime(new Date(Date.UTC(2025, 0, 1, 22, 0, 0, 0)));
+    sendMock.mockResolvedValueOnce({ id: 'new-time-2' } as any);
+    await sendReminders(client, Polls);
+    expect(sendMock).toHaveBeenCalledTimes(2);
+
+    vi.useRealTimers();
+
+    // Restore env
+    process.env.WHEN_DEBUG_REMINDERS = prev;
   });
 });

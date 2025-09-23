@@ -44,6 +44,7 @@ export type RemindersConfig = {
   enabled: boolean; // default true
   intervalHours: number; // default 24
   lastSent?: number; // epoch ms
+  startTime?: string; // optional HH:mm (minutes should be 00 to align with hourly scheduler)
 };
 
 export const ReminderSettings = {
@@ -51,10 +52,12 @@ export const ReminderSettings = {
     const enabledStr = ChannelConfig.get(guildId, channelId, "reminders.enabled");
     const intervalStr = ChannelConfig.get(guildId, channelId, "reminders.intervalHours");
     const lastStr = ChannelConfig.get(guildId, channelId, "reminders.lastSent");
+    const startStr = ChannelConfig.get(guildId, channelId, "reminders.startTime");
     const enabled = enabledStr === undefined ? true : enabledStr === "true";
     const interval = intervalStr ? Math.max(1, parseInt(intervalStr, 10) || 24) : 24;
     const lastSent = lastStr ? Number(lastStr) || undefined : undefined;
-    return { enabled, intervalHours: interval, lastSent };
+    const startTime = startStr || undefined;
+    return { enabled, intervalHours: interval, lastSent, startTime };
   },
   setEnabled(guildId: string, channelId: string, enabled: boolean) {
     ChannelConfig.set(guildId, channelId, "reminders.enabled", enabled ? "true" : "false");
@@ -66,5 +69,10 @@ export const ReminderSettings = {
   setLastSentNow(guildId: string, channelId: string) {
     ChannelConfig.set(guildId, channelId, "reminders.lastSent", String(Date.now()));
   },
+  setStartTime(guildId: string, channelId: string, hhmm: string) {
+    ChannelConfig.set(guildId, channelId, "reminders.startTime", hhmm);
+  },
+  clearStartTime(guildId: string, channelId: string) {
+    ChannelConfig.delete(guildId, channelId, "reminders.startTime");
+  },
 };
-

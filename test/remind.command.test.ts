@@ -16,7 +16,7 @@ vi.mock('../src/util/reminders.js', () => {
 });
 
 import RemindCommand from '../src/commands/remind.js';
-import { ReminderSettings } from '../src/store/config.js';
+import { ReminderSettings, ChannelConfig } from '../src/store/config.js';
 
 async function getSendRemindersMock() {
   const mod = await import('../src/util/reminders.js');
@@ -68,10 +68,21 @@ describe('Remind command', () => {
   });
 
   it('shows and updates per-channel config', async () => {
+    const guildId = 'g3';
+    const channelId = 'chan-conf';
+
+    // Ensure clean slate even if a previous test run left persisted values
+    for (const key of ['reminders.enabled','reminders.intervalHours','reminders.lastSent','reminders.startTime']) {
+      ChannelConfig.delete(guildId, channelId, key);
+    }
+    // Explicitly set defaults for this test to avoid flakiness across runs
+    ReminderSettings.setEnabled(guildId, channelId, true);
+    ReminderSettings.setIntervalHours(guildId, channelId, 24);
+
     const baseInteraction: any = {
       member: { permissions: { has: () => true } },
-      guild: { id: 'g3' },
-      channel: { id: 'chan-conf' },
+      guild: { id: guildId },
+      channel: { id: channelId },
       reply: vi.fn().mockResolvedValue(undefined),
       options: {
         getSubcommand: () => 'config',
@@ -94,7 +105,7 @@ describe('Remind command', () => {
       reply: vi.fn().mockResolvedValue(undefined),
       options: {
         getSubcommand: () => 'config',
-        getString: (_: string) => 'false',
+        getString: (name: string) => (name === 'enabled' ? 'false' : null),
         getInteger: (_: string) => 12,
       },
     };
@@ -105,8 +116,55 @@ describe('Remind command', () => {
     expect(content).toContain('intervalHours: 12');
 
     // Verify persisted values via ReminderSettings
-    const cfg = ReminderSettings.get('g3', 'chan-conf');
+    const cfg = ReminderSettings.get(guildId, channelId);
     expect(cfg.enabled).toBe(false);
     expect(cfg.intervalHours).toBe(12);
+  });
+
+  it('sets and clears start_time', async () => {
+    const guildId = 'g4';
+    const channelId = 'chan-timeconf';
+
+    // Clean slate
+    for (const key of ['reminders.enabled','reminders.intervalHours','reminders.lastSent','reminders.startTime']) {
+      ChannelConfig.delete(guildId, channelId, key);
+    }
+
+    const thisArg: any = { isAdmin: () => true };
+
+    // Set start_time to 10:00
+    const setInteraction: any = {
+      member: { permissions: { has: () => true } },
+      guild: { id: guildId },
+      channel: { id: channelId },
+      reply: vi.fn().mockResolvedValue(undefined),
+      options: {
+        getSubcommand: () => 'config',
+        getString: (name: string) => (name === 'start_time' ? '10:00' : null),
+        getInteger: (_: string) => undefined,
+      },
+    };
+
+    await RemindCommand.prototype.chatInputRun.call(thisArg, setInteraction as any);
+    let content = (setInteraction.reply.mock.calls[0]![0] as any).content as string;
+    expect(content).toContain('startTime: 10:00');
+
+    // Clear start_time
+    const clearInteraction: any = {
+      ...setInteraction,
+      reply: vi.fn().mockResolvedValue(undefined),
+      options: {
+        getSubcommand: () => 'config',
+        getString: (name: string) => (name === 'start_time' ? 'clear' : null),
+        getInteger: (_: string) => undefined,
+      },
+    };
+
+    await RemindCommand.prototype.chatInputRun.call(thisArg, clearInteraction as any);
+    content = (clearInteraction.reply.mock.calls[0]![0] as any).content as string;
+    expect(content).not.toContain('startTime:');
+
+    const cfg = ReminderSettings.get(guildId, channelId);
+    expect(cfg.startTime).toBeUndefined();
   });
 });

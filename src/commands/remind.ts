@@ -40,6 +40,12 @@ export default class RemindCommand extends Command {
                   .setDescription("Minimum hours between reminders (>=1)")
                   .setRequired(false)
               )
+              .addStringOption((o: any) =>
+                o
+                  .setName("start_time")
+                  .setDescription("Starting time in HH:mm (UTC). Use minutes :00. Use 'clear' to unset.")
+                  .setRequired(false)
+              )
           ),
       process.env.GUILD_ID ? { guildIds: [process.env.GUILD_ID] } : undefined,
     );
@@ -91,21 +97,22 @@ export default class RemindCommand extends Command {
     if (sub === "config") {
       const enabledChoice = interaction.options.getString("enabled");
       const intervalHours = interaction.options.getInteger("interval_hours") ?? undefined;
+      const startTime = interaction.options.getString("start_time") ?? undefined;
 
       // If show or no options, just display current
-      if (!enabledChoice && intervalHours === undefined) {
+      if (!enabledChoice && intervalHours === undefined && !startTime) {
         const current = ReminderSettings.get(guildId, channelId);
         await interaction.reply({
-          content: `Current reminder settings for this channel:\n- enabled: ${current.enabled}\n- intervalHours: ${current.intervalHours}${current.lastSent ? `\n- lastSent: ${new Date(current.lastSent).toISOString()}` : ""}`,
+          content: `Current reminder settings for this channel:\n- enabled: ${current.enabled}\n- intervalHours: ${current.intervalHours}${current.startTime ? `\n- startTime: ${current.startTime} (UTC)` : ""}${current.lastSent ? `\n- lastSent: ${new Date(current.lastSent).toISOString()}` : ""}`,
           ephemeral: true,
         });
         return;
       }
 
-      if (enabledChoice === "show") {
+      if (enabledChoice === "show" || startTime === "show") {
         const current = ReminderSettings.get(guildId, channelId);
         await interaction.reply({
-          content: `Current reminder settings for this channel:\n- enabled: ${current.enabled}\n- intervalHours: ${current.intervalHours}${current.lastSent ? `\n- lastSent: ${new Date(current.lastSent).toISOString()}` : ""}`,
+          content: `Current reminder settings for this channel:\n- enabled: ${current.enabled}\n- intervalHours: ${current.intervalHours}${current.startTime ? `\n- startTime: ${current.startTime} (UTC)` : ""}${current.lastSent ? `\n- lastSent: ${new Date(current.lastSent).toISOString()}` : ""}`,
           ephemeral: true,
         });
         return;
@@ -122,9 +129,27 @@ export default class RemindCommand extends Command {
         ReminderSettings.setIntervalHours(guildId, channelId, hours);
       }
 
+      if (startTime !== undefined) {
+        if (startTime === "clear") {
+          ReminderSettings.clearStartTime(guildId, channelId);
+        } else {
+          const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(startTime);
+          if (!m) {
+            await interaction.reply({ content: "start_time must be in HH:mm (00-23:00-59) format.", ephemeral: true });
+            return;
+          }
+          const minutes = Number(m[2]);
+          if (minutes !== 0) {
+            await interaction.reply({ content: "start_time minutes must be :00 to align with the hourly scheduler.", ephemeral: true });
+            return;
+          }
+          ReminderSettings.setStartTime(guildId, channelId, startTime);
+        }
+      }
+
       const updated = ReminderSettings.get(guildId, channelId);
       await interaction.reply({
-        content: `Updated reminder settings:\n- enabled: ${updated.enabled}\n- intervalHours: ${updated.intervalHours}`,
+        content: `Updated reminder settings:\n- enabled: ${updated.enabled}\n- intervalHours: ${updated.intervalHours}${updated.startTime ? `\n- startTime: ${updated.startTime} (UTC)` : ""}`,
         ephemeral: true,
       });
       return;

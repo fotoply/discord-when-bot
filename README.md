@@ -9,7 +9,7 @@ A minimal Discord bot built with the Sapphire Framework that creates availabilit
 - Message includes a per-date list of responders and a combined list of all voters
 - Button clicks toggle availability and live-update counts and lists
 - Persistent polls backed by a local SQLite database (survive restarts)
-- Admin-only reminders: `/remind now` pings non-responders in the current channel; `/remind config` manages per-channel reminder settings (enable/disable and frequency)
+- Admin-only reminders with per-channel schedule: set a starting time (UTC) and interval to control when reminders fire (e.g., 12:00 + 24h → daily at 12:00; 10:00 + 12h → 10:00 and 22:00)
 
 ## Prerequisites
 
@@ -59,15 +59,24 @@ If the bot restarts, users can continue to interact with existing poll messages;
 
 ### Reminders
 
-- The bot evaluates reminders every hour on the hour. Per-channel settings control whether a reminder is sent.
+- The bot evaluates reminders every hour on the hour (UTC). Per-channel settings control whether and when a reminder is sent.
+- Scheduling model:
+  - Set a per-channel start time (HH:mm, UTC, minutes must be :00) and an interval in hours. Reminders will be sent at the start time and then every N hours thereafter.
+  - Examples:
+    - start_time: 12:00, interval_hours: 24 → daily at 12:00 UTC.
+    - start_time: 10:00, interval_hours: 12 → 10:00 and 22:00 UTC each day.
+  - If no start time is configured, the bot uses a simple “minimum hours since last reminder” throttle.
+  - Admin-triggered `/remind now` bypasses the schedule/throttle and sends immediately (if there are non-responders).
 - Admin command:
   - `/remind now` — triggers a reminder in the current channel for any active polls, pinging only non-responders. If a previous reminder exists, it will be replaced.
   - `/remind config` — shows current settings for this channel.
   - `/remind config enabled:true|false` — enable or disable reminders for this channel.
   - `/remind config interval_hours:<n>` — set minimum hours between reminders (integer, default 24).
+  - `/remind config start_time:HH:mm` — set the starting time in UTC (minutes must be :00). Use `start_time:clear` to unset.
 - Defaults per channel:
   - enabled: true
   - interval_hours: 24
+  - start_time: unset (uses simple throttle)
 
 ## Data Persistence (SQLite)
 
@@ -79,6 +88,7 @@ If the bot restarts, users can continue to interact with existing poll messages;
   - `channel_config(guild_id, channel_id, key, value)` — generalized per-channel key/value configuration. Reminder keys used:
     - `reminders.enabled` → `"true"|"false"` (default `"true"`)
     - `reminders.intervalHours` → integer hours as string (default `"24"`)
+    - `reminders.startTime` → `HH:mm` in UTC, minutes must be `00` (optional)
     - `reminders.lastSent` → epoch milliseconds as string (managed by the bot)
 - Foreign keys are enforced; writes are wrapped where useful for consistency.
 
@@ -95,15 +105,15 @@ npm run smoke:load
 
 ## Configuration
 
-- `src/index.ts` boots the Sapphire client and schedules hourly reminder checks (per-channel throttling is enforced by the reminders utility).
+- `src/index.ts` boots the Sapphire client and schedules hourly reminder checks (per-channel throttling/scheduling is enforced by the reminders utility).
 - `src/commands/when.ts` defines the `/when` command and shows the dropdowns.
 - `src/commands/poll.ts` provides list/repost functionality and a context menu to reopen a poll.
-- `src/commands/remind.ts` adds `/remind now` and `/remind config` for admins.
+- `src/commands/remind.ts` adds `/remind now` and `/remind config` for admins. Use `start_time` and `interval_hours` to control reminder times per channel.
 - `src/listeners/interactionCreate.ts` handles dropdowns, creates the poll, toggles, and message updates.
 - `src/store/polls.ts` implements a cache backed by SQLite persistence.
 - `src/store/sessions.ts` holds temporary per-user selection state during setup.
 - `src/store/config.ts` provides a generalized per-channel configuration helper for reminder settings (and future features).
-- `src/util/reminders.ts` computes non-responders and posts or replaces reminder messages per channel.
+- `src/util/reminders.ts` computes non-responders and posts or replaces reminder messages per channel, enforcing per-channel schedule/throttle.
 - `src/util/date.ts` provides date validation, range building, and human-readable labels.
 
 ## Troubleshooting

@@ -13,13 +13,55 @@ export type SendRemindersOptions = {
     force?: boolean;    // if true, bypass interval throttle
 };
 
+function parseStart(hhmm: string | undefined): { h: number; m: number } | undefined {
+    if (!hhmm) return undefined;
+    const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(hhmm);
+    if (!m) return undefined;
+    const h = Number(m[1]);
+    const min = Number(m[2]);
+    return { h, m: min };
+}
+
+function isDueAtThisTick(now: Date, start: { h: number; m: number }, intervalHours: number, lastSent?: number): boolean {
+    // We schedule on UTC boundaries only
+    const nowMin = now.getUTCMinutes();
+    if (nowMin !== start.m) return false; // only fire on the minute specified (recommend 00)
+
+    // Find the last slot time <= now based on start + n*interval
+    // Compute minutes since start of day
+    const minutesToday = now.getUTCHours() * 60 + nowMin;
+    const startMinutes = start.h * 60 + start.m;
+    const intervalMinutes = Math.max(60, intervalHours * 60);
+
+    let k: number;
+    if (minutesToday < startMinutes) {
+        // Before today's first slot -> use yesterday's slots
+        const total = (24 * 60) - (startMinutes - minutesToday);
+        k = Math.floor(total / intervalMinutes);
+    } else {
+        k = Math.floor((minutesToday - startMinutes) / intervalMinutes);
+    }
+
+    const lastSlot = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), start.h, start.m, 0, 0));
+    lastSlot.setUTCMinutes(lastSlot.getUTCMinutes() + k * intervalMinutes);
+
+    if (lastSlot.getTime() > now.getTime()) return false; // shouldn't happen due to floor, but guard
+
+    // If we've already sent at or after the last slot, skip
+    if (lastSent && lastSent >= lastSlot.getTime()) return false;
+
+    // Only emit at exact aligned hour/minute
+    const aligned = (minutesToday - startMinutes) % intervalMinutes === 0;
+    return aligned;
+}
+
 export async function sendReminders(client: Client, Polls: any, options?: SendRemindersOptions) {
     const openPolls = Polls.allOpen();
     for (const poll of openPolls) {
         if (options?.channelId && poll.channelId !== options.channelId) continue;
         try {
             const channel = await client.channels.fetch(poll.channelId).catch((e) => { dbg(`fetch channel failed for ${poll.channelId}:`, e?.message ?? e); return null; }) as any;
-            if (!channel || !('messages' in channel) || typeof channel.send !== 'function') { dbg(`skip poll ${poll.id}: channel not sendable`); continue; }
+            if (!channel || !("messages" in channel) || typeof channel.send !== 'function') { dbg(`skip poll ${poll.id}: channel not sendable`); continue; }
 
             const guild = (channel as any).guild;
             if (!guild) { dbg(`skip poll ${poll.id}: no guild on channel`); continue; }
@@ -31,17 +73,31 @@ export async function sendReminders(client: Client, Polls: any, options?: SendRe
             let enabled = true;
             let intervalHours = 24;
             let lastSent: number | undefined = undefined;
+            let startTime: string | undefined = undefined;
             if (guildId && chanId) {
                 const cfg = ReminderSettings.get(guildId, chanId);
                 enabled = cfg.enabled;
                 intervalHours = cfg.intervalHours;
                 lastSent = cfg.lastSent;
+                startTime = cfg.startTime;
             }
 
-            if (!enabled) { dbg(`skip poll ${poll.id}: disabled via config`); continue; }
-            if (!options?.force && lastSent && Date.now() - lastSent < intervalHours * 60 * 60 * 1000) {
-                dbg(`skip poll ${poll.id}: interval not elapsed (${intervalHours}h)`);
-                continue;
+            if (!enabled && !options?.force) { dbg(`skip poll ${poll.id}: disabled via config`); continue; }
+
+            if (!options?.force) {
+                const now = new Date();
+                const start = parseStart(startTime);
+                if (start) {
+                    if (!isDueAtThisTick(now, start, intervalHours, lastSent)) {
+                        dbg(`skip poll ${poll.id}: not due for start=${startTime} interval=${intervalHours}h`);
+                        continue;
+                    }
+                } else {
+                    if (lastSent && Date.now() - lastSent < intervalHours * 60 * 60 * 1000) {
+                        dbg(`skip poll ${poll.id}: interval not elapsed (${intervalHours}h)`);
+                        continue;
+                    }
+                }
             }
 
             // Ensure members cache is populated
