@@ -169,7 +169,9 @@ export function renderPollContentCompact(poll: Poll): string {
     }
 
     lines.push("");
-    lines.push(`Total voters: ${votersAll.size}`);
+    // Show all voters by mention on the final line (while keeping per-date counts only)
+    const votersLine = [...votersAll].map((u) => `<@${u}>`).join(", ") || "-";
+    lines.push(`Total voters: ${votersLine}`);
 
     return lines.join("\n");
 }

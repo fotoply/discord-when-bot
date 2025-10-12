@@ -112,12 +112,19 @@ describe('pollRender compact fallback', () => {
     const msg = buildPollMessage(poll);
     const content = msg.content ?? '';
 
-    // Should use the compact header and not include any user mention
+    // Should use the compact header
     expect(content).toContain('Per-date availability (counts only)');
-    expect(content).not.toContain('<@u1>');
 
-    // Count line should show the numeric availability for at least one date
-    expect(content).toMatch(/—\s*120 available/);
+    // Per-date lines should be counts only (no mentions)
+    const perDateLines = content.split('\n').filter((l) => l.trim().startsWith('• '));
+    for (const line of perDateLines) {
+      expect(line).toMatch(/—\s*\d+ available/);
+      expect(line).not.toContain('<@');
+    }
+
+    // Final line should list all voters by mention
+    const totalLine = content.split('\n').find((l) => l.startsWith('Total voters:')) || '';
+    expect(totalLine).toContain('<@u1>');
 
     // And ensure the final content fits within Discord limit
     expect(content.length).toBeLessThanOrEqual(2000);
