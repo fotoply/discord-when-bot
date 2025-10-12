@@ -2,7 +2,7 @@ import {ApplyOptions} from "@sapphire/decorators";
 import {Command} from "@sapphire/framework";
 import type {Channel, ChatInputCommandInteraction} from "discord.js";
 import {Polls} from "../store/polls.js";
-import {componentsFor, renderPollContent} from "../util/pollRender.js";
+import {componentsFor, renderPollContent, clampDiscordText, buildPollMessage} from "../util/pollRender.js";
 
 function log(...args: any[]) {
     // eslint-disable-next-line no-console
@@ -50,7 +50,8 @@ export default class PollCommand extends Command {
                 return;
             }
             const lines = open.map((p) => `• ${p.id} — channel: ${p.channelId} — creator: <@${p.creatorId}>`);
-            await interaction.reply({content: `Open polls:\n${lines.join("\n")}`, ephemeral: true});
+            const content = clampDiscordText(`Open polls:\n${lines.join("\n")}`);
+            await interaction.reply({content, ephemeral: true});
             return;
         }
 
@@ -99,7 +100,8 @@ export default class PollCommand extends Command {
                 }
             }
 
-            const message = await textChannel.send({content: renderPollContent(poll), components: componentsFor(poll)});
+            const msgOpts = buildPollMessage(poll);
+            const message = await textChannel.send(msgOpts as any);
 
             // Update stored channel and message id
             Polls.setMessageIdAndChannel(poll.id, (textChannel as any).id, message.id);
@@ -166,7 +168,8 @@ export default class PollCommand extends Command {
                     if (oldChannel && (oldChannel as any).isTextBased && typeof (oldChannel as any).isTextBased === "function") {
                         const oldMsg = await (oldChannel as any).messages.fetch(foundPoll.messageId as string).catch(() => null);
                         if (oldMsg) {
-                            await oldMsg.edit({content: renderPollContent(foundPoll), components: componentsFor(foundPoll)}).catch(() => {});
+                            const msgOpts = buildPollMessage(foundPoll);
+                            await oldMsg.edit(msgOpts as any).catch(() => {});
                             log(`reopen: edited original message ${foundPoll.messageId}`);
                         }
                     }

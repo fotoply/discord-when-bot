@@ -1,8 +1,55 @@
-// filepath: c:\Users\norbe\IdeaProjects\discord-when-bot\src\util\pollRender.ts
 import {ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder} from "discord.js";
 import {NONE_SELECTION, Poll} from "../store/polls.js";
 import {formatDateLabel} from "./date.js";
 import { renderGridPng } from "./gridImage.js";
+
+// Ensure text content respects Discord's 2000 character limit.
+export function clampDiscordText(text: string, max = 2000): string {
+    if (!text) return text;
+    if (text.length <= max) return text;
+
+    const suffix = "\n… (truncated)"; // keep it obvious and readable
+    const reserve = Math.min(suffix.length, max);
+
+    // Try line-wise accumulation to preserve structure
+    const lines = text.split(/\n/);
+    const out: string[] = [];
+    let used = 0;
+    for (const line of lines) {
+        const addLen = (out.length ? 1 : 0) + line.length; // +1 for newline
+        if (used + addLen + reserve <= max) {
+            // whole line fits (with suffix reserved)
+            if (out.length) used += 1; // newline
+            out.push(line);
+            used += line.length;
+            continue;
+        }
+        // Does not fit as a whole. Fit as much as possible of this line.
+        const available = Math.max(0, max - used - reserve);
+        if (available > 0) {
+            // Try to cut at a word boundary
+            const slice = line.slice(0, available);
+            const boundary = Math.max(slice.lastIndexOf(" "), slice.lastIndexOf(","), slice.lastIndexOf(";"));
+            const trimmed = boundary > 10 ? slice.slice(0, boundary) : slice; // avoid overly small cuts
+            if (out.length) {
+                out.push(trimmed);
+            } else {
+                // Even first line was too long; ensure we don't start with an empty line
+                out.push(trimmed);
+            }
+        }
+        break; // we're out of space
+    }
+
+    // Ensure final length <= max by trimming if necessary, then add suffix
+    let joined = out.join("\n");
+    const roomForSuffix = Math.max(0, max - suffix.length);
+    if (joined.length > roomForSuffix) {
+        joined = joined.slice(0, roomForSuffix);
+        // Trim any incomplete surrogate pair edge-case implicitly OK in JS strings
+    }
+    return joined + suffix;
+}
 
 export function componentsFor(poll: Poll): ActionRowBuilder<ButtonBuilder>[] {
     if (poll.closed) return [];
@@ -93,6 +140,40 @@ export function renderPollContent(poll: Poll): string {
     return lines.join("\n");
 }
 
+// Compact rendering: replace per-date user lists with counts, and summarize voters
+export function renderPollContentCompact(poll: Poll): string {
+    const lines: string[] = [];
+    const header = poll.closed
+        ? `Availability poll by <@${poll.creatorId}> — CLOSED`
+        : `Availability poll by <@${poll.creatorId}>. Click the dates you are available:`;
+    lines.push(header);
+    lines.push("");
+    lines.push("Per-date availability (counts only):");
+
+    const votersAll = new Set<string>();
+    const votersReal = new Set<string>();
+    for (const [d, set] of poll.selections) {
+        for (const u of set) {
+            votersAll.add(u);
+            if (d !== NONE_SELECTION) votersReal.add(u);
+        }
+    }
+    const votersRealCount = votersReal.size;
+
+    for (const d of poll.dates) {
+        if (d === NONE_SELECTION) continue;
+        const set = poll.selections.get(d) ?? new Set<string>();
+        const allOk = votersRealCount > 0 && set.size === votersRealCount;
+        const star = allOk ? "⭐ " : "";
+        lines.push(`• ${star}${formatDateLabel(d)} — ${set.size} available`);
+    }
+
+    lines.push("");
+    lines.push(`Total voters: ${votersAll.size}`);
+
+    return lines.join("\n");
+}
+
 function shortDate(iso: string) {
     const d = new Date(iso + "T00:00:00Z");
     const m = String(d.getUTCMonth() + 1).padStart(2, "0");
@@ -177,18 +258,26 @@ export function buildPollMessage(poll: Poll, extras?: GridExtras): { content?: s
          const { file } = buildGridImageEmbed(poll, extras);
          return { content: "", embeds: [], components: componentsFor(poll), files: file ? [file] : [], attachments: [] };
      }
+
+     // Helper to select full vs compact content
+     const full = renderPollContent(poll);
+     const content = full.length <= 2000 ? full : ((): string => {
+         const compact = renderPollContentCompact(poll);
+         return compact.length <= 2000 ? compact : clampDiscordText(compact);
+     })();
+
      // Closed poll: show list content and attach grid image file only (no embed)
      if (poll.closed) {
-         // attach grid image file without using an embed
          const { file } = buildGridImageEmbed(poll, extras);
          return {
-            content: renderPollContent(poll),
+            content,
             embeds: [],
             components: [],
             files: file ? [file] : [],
             attachments: []
         };
      }
+
      // Default list view for open polls
-     return { content: renderPollContent(poll), embeds: [], components: componentsFor(poll), files: [], attachments: [] };
+     return { content, embeds: [], components: componentsFor(poll), files: [], attachments: [] };
 }

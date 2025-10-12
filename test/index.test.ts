@@ -130,7 +130,7 @@ describe('reminder logic', () => {
         expect(setReminderMessageId).toHaveBeenCalledWith('poll1', 'new-msg');
 
         // Verify log output includes [reminders] sent message
-        const hadRemindersLog = (logSpy.mock.calls as any[]).some((args) => args[0] === '[reminders]' && String(args[1]).includes('sent reminder message'));
+        const hadRemindersLog = (logSpy.mock.calls as any[]).some((args) => args[0] === '[reminders]' && /sent\s+\d+\s+reminder message\(s\)\s+for poll/.test(String(args[1])));
         expect(hadRemindersLog).toBe(true);
 
         // Cleanup

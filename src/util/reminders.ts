@@ -50,8 +50,29 @@ function isDueAtThisTick(now: Date, start: { h: number; m: number }, intervalHou
     if (lastSent && lastSent >= lastSlot.getTime()) return false;
 
     // Only emit at exact aligned hour/minute
-    const aligned = (minutesToday - startMinutes) % intervalMinutes === 0;
-    return aligned;
+    return (minutesToday - startMinutes) % intervalMinutes === 0;
+}
+
+// Split a mentions list into multiple Discord-safe messages, each with the given prefix.
+function splitReminderMessages(mentions: string[], prefix: string, max = 2000): string[] {
+    const out: string[] = [];
+    let current = "";
+    for (const mention of mentions) {
+        // Include a space before each mention except when the chunk currently has no mentions appended yet (beyond prefix)
+        const sep = current.length ? " " : "";
+        const candidate = current + sep + mention;
+        // If prefix + candidate would overflow, flush current (if any) and start a new chunk with this mention
+        if ((prefix.length + candidate.length) > max) {
+            if (current.length) out.push(prefix + current);
+            // If even a single mention cannot fit alongside the prefix (extremely unlikely), we still send it alone.
+            current = mention;
+            // In very pathological cases where prefix is near 2000, we rely on Discord rejection which isn't applicable here.
+            continue;
+        }
+        current = candidate;
+    }
+    if (current.length) out.push(prefix + current);
+    return out.length ? out : [prefix.trimEnd()];
 }
 
 export async function sendReminders(client: Client, Polls: any, options?: SendRemindersOptions) {
@@ -136,13 +157,18 @@ export async function sendReminders(client: Client, Polls: any, options?: SendRe
             // If nobody to ping, skip sending a new reminder
             if (toPing.length === 0) { log(`skip poll ${poll.id}: no members to ping`); continue; }
 
-            // Build a single message with mentions
-            const mentions = toPing.map((id) => `<@${id}>`).join(' ');
-            const content = `Reminder: please respond to the poll${poll.messageId ? ' above' : ''}. ${mentions}`;
+            // Build mention strings and split across multiple messages as needed
+            const mentions = toPing.map((id) => `<@${id}>`);
+            const prefix = `Reminder: please respond to the poll${poll.messageId ? ' above' : ''}. `;
+            const chunks = splitReminderMessages(mentions, prefix, 2000);
 
-            const sent = await (channel as SendableChannels).send({ content });
-            log(`sent reminder message ${ (sent as any).id } for poll ${poll.id}`);
-            Polls.setReminderMessageId(poll.id, (sent as any).id);
+            let firstSentId: string | undefined;
+            for (const content of chunks) {
+                const sent = await (channel as SendableChannels).send({ content });
+                if (!firstSentId) firstSentId = (sent as any).id;
+            }
+            log(`sent ${chunks.length} reminder message(s) for poll ${poll.id}`);
+            if (firstSentId) Polls.setReminderMessageId(poll.id, firstSentId);
 
             // Persist lastSent only when a reminder is actually sent
             if (guildId && chanId) {

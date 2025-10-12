@@ -91,3 +91,35 @@ describe('pollRender extras influence grid image branches', () => {
     expect((msg.files || []).length).toBe(0);
   });
 });
+
+describe('pollRender compact fallback', () => {
+  it('falls back to compact content when full content would exceed 2000 characters', () => {
+    const dates: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      const day = 10 + i;
+      dates.push(`2025-09-${String(day).padStart(2, '0')}`);
+    }
+    const poll = Polls.createPoll({ channelId: 'c-compact', creatorId: 'creatorC', dates });
+
+    // Add many voters per date to make the full content very long (mentions list)
+    const votersPerDate = 120;
+    for (const d of dates) {
+      for (let u = 1; u <= votersPerDate; u++) {
+        Polls.toggle(poll.id, d, `u${u}`);
+      }
+    }
+
+    const msg = buildPollMessage(poll);
+    const content = msg.content ?? '';
+
+    // Should use the compact header and not include any user mention
+    expect(content).toContain('Per-date availability (counts only)');
+    expect(content).not.toContain('<@u1>');
+
+    // Count line should show the numeric availability for at least one date
+    expect(content).toMatch(/—\s*120 available/);
+
+    // And ensure the final content fits within Discord limit
+    expect(content.length).toBeLessThanOrEqual(2000);
+  });
+});

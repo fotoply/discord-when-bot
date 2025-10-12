@@ -335,4 +335,48 @@ describe('util/reminders', () => {
     // Restore env
     process.env.WHEN_DEBUG_REMINDERS = prev;
   });
+
+  it('splits long reminder mentions into multiple messages with no truncation', async () => {
+    const poll = {
+      id: 'plong',
+      channelId: 'c-long',
+      messageId: 'poll-msg',
+      selections: makeSelections(['u0']),
+    };
+    const setReminderMessageId = vi.fn();
+    const Polls = { allOpen: vi.fn(() => [poll]), setReminderMessageId } as any;
+
+    // Return unique ids so we can assert first one persisted
+    let counter = 0;
+    const sendMock = vi.fn((opts: any) => Promise.resolve({ id: `new-long-${++counter}`, content: opts?.content }));
+
+    // Build many non-responders to produce a very long mentions string (>2000 chars total)
+    const members = new Map<string, any>();
+    members.set('u0', { id: 'u0', user: { bot: false } }); // responded
+    const COUNT = 400; // 400 mentions should be split
+    for (let i = 1; i <= COUNT; i++) {
+      members.set(`u${i}`, { id: `u${i}`, user: { bot: false } });
+    }
+    const guild = { members: { cache: members, fetch: vi.fn() } } as any;
+    const channel = { guild, send: sendMock, messages: { delete: vi.fn() } } as any;
+    const client = { channels: { fetch: vi.fn(() => Promise.resolve(channel)) } } as any;
+
+    await sendReminders(client as any, Polls);
+
+    expect((sendMock.mock.calls as unknown as any[][]).length).toBeGreaterThan(1);
+    // All chunks must be within Discord limit and contain no truncation suffix
+    const calls = (sendMock.mock.calls as unknown as any[][]);
+    for (const call of calls) {
+      const c = call[0]?.content as string;
+      expect(c.length).toBeLessThanOrEqual(2000);
+      expect(c).toContain('Reminder:');
+      expect(c).not.toContain('… (truncated)');
+    }
+    // Last chunk should include the last mention
+    const lastCall = calls[calls.length - 1]!;
+    const lastContent = (lastCall?.[0]?.content ?? '') as string;
+    expect(lastContent).toContain('<@u400>');
+    // First sent id persisted
+    expect(setReminderMessageId).toHaveBeenCalledWith('plong', 'new-long-1');
+  });
 });
