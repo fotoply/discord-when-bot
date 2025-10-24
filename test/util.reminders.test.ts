@@ -49,6 +49,8 @@ describe('util/reminders', () => {
     expect(content).toContain('Reminder:');
     expect(content).toContain('<@u2>');
     expect(content).not.toContain('<@u1>');
+    // new: ensure reminders reply to the poll message when available
+    expect(firstArg.reply).toEqual({ messageReference: 'poll-msg', failIfNotExists: false });
     expect(setReminderMessageId).toHaveBeenCalledWith('p1', 'new-1');
   });
 
@@ -378,5 +380,41 @@ describe('util/reminders', () => {
     expect(lastContent).toContain('<@u400>');
     // First sent id persisted
     expect(setReminderMessageId).toHaveBeenCalledWith('plong', 'new-long-1');
+  });
+
+  it('does not set reply when original poll messageId is null', async () => {
+    const poll = {
+      id: 'p1-null',
+      channelId: 'c1-null',
+      messageId: null as any,
+      selections: makeSelections(['u1']),
+      reminderMessageId: 'old-null',
+    };
+    const setReminderMessageId = vi.fn();
+    const Polls = { allOpen: vi.fn(() => [poll]), setReminderMessageId } as any;
+
+    const sendMock = vi.fn(() => Promise.resolve({ id: 'new-null' }));
+    const deleteMock = vi.fn(() => Promise.resolve());
+
+    const members = new Map<string, any>([
+      ['u1', { id: 'u1', user: { bot: false } }],
+      ['u2', { id: 'u2', user: { bot: false } }],
+    ]);
+    const guild = { members: { cache: members, fetch: vi.fn() } } as any;
+    const channel = { guild, send: sendMock, messages: { delete: deleteMock } } as any;
+    const client = { channels: { fetch: vi.fn(() => Promise.resolve(channel)) } } as any;
+
+    await sendReminders(client, Polls);
+
+    expect(deleteMock).toHaveBeenCalledWith('old-null');
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    const call = (sendMock.mock.calls as unknown as any[][])[0]!;
+    const arg = call[0] as any;
+    // No reply field should be present when messageId is null
+    expect(arg.reply).toBeUndefined();
+    // Content should not include the "above" hint when not replying
+    expect((arg.content as string)).toContain('Reminder:');
+    expect((arg.content as string)).not.toContain('above');
+    expect(setReminderMessageId).toHaveBeenCalledWith('p1-null', 'new-null');
   });
 });

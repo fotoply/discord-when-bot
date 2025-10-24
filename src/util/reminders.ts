@@ -164,7 +164,12 @@ export async function sendReminders(client: Client, Polls: any, options?: SendRe
 
             let firstSentId: string | undefined;
             for (const content of chunks) {
-                const sent = await (channel as SendableChannels).send({ content });
+                const sendOptions: any = { content };
+                // When possible, make the reminder a reply to the original poll message for better context
+                if (poll.messageId) {
+                    sendOptions.reply = { messageReference: poll.messageId, failIfNotExists: false };
+                }
+                const sent = await (channel as SendableChannels).send(sendOptions);
                 if (!firstSentId) firstSentId = (sent as any).id;
             }
             log(`sent ${chunks.length} reminder message(s) for poll ${poll.id}`);
