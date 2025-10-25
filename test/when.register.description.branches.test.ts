@@ -11,6 +11,7 @@ describe('When command registration description fallback', () => {
         const builder: any = {
           setName() { return this; },
           setDescription() { return this; },
+          addRoleOption(fn2: Function) { const opt: any = { setName() { return opt; }, setDescription() { return opt; }, setRequired() { return opt; } }; fn2(opt); return this; },
         };
         fn(builder);
       },
@@ -23,4 +24,3 @@ describe('When command registration description fallback', () => {
     expect(true).toBe(true);
   });
 });
-

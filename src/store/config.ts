@@ -76,3 +76,21 @@ export const ReminderSettings = {
     ChannelConfig.delete(guildId, channelId, "reminders.startTime");
   },
 };
+
+// Default role setting per channel; used when creating polls if no role was provided.
+export const DefaultRole = {
+  get(guildId: string | undefined, channelId: string): string | undefined {
+    // Prefer exact guild match; if not available, allow wildcard '*' for tests/mocks.
+    if (guildId) {
+      const v = ChannelConfig.get(guildId, channelId, "polls.defaultRoleId");
+      if (v !== undefined) return v;
+    }
+    return ChannelConfig.get("*", channelId, "polls.defaultRoleId");
+  },
+  set(guildId: string, channelId: string, roleId: string) {
+    ChannelConfig.set(guildId, channelId, "polls.defaultRoleId", roleId);
+  },
+  clear(guildId: string, channelId: string) {
+    ChannelConfig.delete(guildId, channelId, "polls.defaultRoleId");
+  }
+};

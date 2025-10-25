@@ -237,7 +237,8 @@ class PollStore {
 
     // Return all open polls (hydrated)
     allOpen(): Poll[] {
-        const rows = db.prepare("SELECT id FROM polls WHERE closed = 0").all() as { id: string }[];
+        // Order by insertion so callers can reverse to get newest-first reliably
+        const rows = db.prepare("SELECT id FROM polls WHERE closed = 0 ORDER BY rowid ASC").all() as { id: string }[];
         const out: Poll[] = [];
         for (const r of rows) {
             const p = this.get(r.id);
@@ -293,8 +294,13 @@ class PollStore {
 
         let roles: string[] | undefined;
         if (row.roles) {
-            try { roles = JSON.parse(row.roles); } catch { roles = undefined; }
-            if (Array.isArray(roles) && roles.length === 0) roles = undefined;
+            try {
+                const parsed: unknown = JSON.parse(row.roles);
+                roles = Array.isArray(parsed) ? (parsed as string[]) : undefined;
+            } catch {
+                roles = undefined;
+            }
+            if (roles && roles.length === 0) roles = undefined;
         }
 
         const poll: Poll = {

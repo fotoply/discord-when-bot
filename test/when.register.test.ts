@@ -21,6 +21,11 @@ describe('When command registration', () => {
             setDescription() {
                 return this;
             },
+            addRoleOption(fn: Function) {
+                const opt: any = { setName() { return opt; }, setDescription() { return opt; }, setRequired() { return opt; } };
+                fn(opt);
+                return this;
+            },
         };
         const registry: any = {
             registerChatInputCommand: (fn: Function, guildOpt?: any) => {
@@ -52,6 +57,11 @@ describe('When command registration', () => {
             setDescription() {
                 return this;
             },
+            addRoleOption(fn: Function) {
+                const opt: any = { setName() { return opt; }, setDescription() { return opt; }, setRequired() { return opt; } };
+                fn(opt);
+                return this;
+            },
         };
         const registry: any = {
             registerChatInputCommand: (fn: Function, guildOpt?: any) => {
@@ -72,4 +82,3 @@ describe('When command registration', () => {
         if (prev === undefined) delete process.env.GUILD_ID; else process.env.GUILD_ID = prev;
     });
 });
-

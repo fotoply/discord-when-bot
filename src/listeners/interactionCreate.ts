@@ -10,6 +10,7 @@ import {Polls} from "../store/polls.js";
 import {Sessions} from "../store/sessions.js";
 import {buildDateRange, buildFutureDates, formatDateLabel, isValidISODate,} from "../util/date.js";
 import {buildPollMessage} from "../util/pollRender.js";
+import { DefaultRole } from "../store/config.js";
 
 function log(...args: any[]) {
     // eslint-disable-next-line no-console
@@ -189,7 +190,13 @@ export default class InteractionCreateListener extends Listener<
             return;
         }
 
-        const roles = Sessions.getRoles(interaction.user.id);
+        // Roles from session (selected via /when optional role param)
+        let roles = Sessions.getRoles(interaction.user.id);
+        // Fallback to channel default role when none selected
+        if (!roles || roles.length === 0) {
+            const def = DefaultRole.get(interaction.guildId, interaction.channelId ?? "");
+            if (def) roles = [def];
+        }
         const poll = Polls.createPoll({
             channelId: interaction.channelId ?? "unknown",
             creatorId: interaction.user.id,
@@ -310,7 +317,14 @@ export default class InteractionCreateListener extends Listener<
             return;
         }
 
-        const roles = Sessions.getRoles(interaction.user.id);
+        // Roles from session (selected via /when optional role param)
+        let roles = Sessions.getRoles(interaction.user.id);
+        // Fallback to channel default role when none selected
+        if (!roles || roles.length === 0) {
+            const channelId = (interaction.channel as any).id as string | undefined;
+            const def = DefaultRole.get((interaction as any).guildId, channelId ?? "");
+            if (def) roles = [def];
+        }
         const poll = Polls.createPoll({
             channelId: (interaction.channel as any).id,
             creatorId: interaction.user.id,

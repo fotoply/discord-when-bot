@@ -21,15 +21,11 @@ export default class WhenCommand extends Command {
                 const b = builder
                     .setName(this.name)
                     .setDescription(this.description ?? "Create an availability poll");
-                // Add optional role parameter if supported by the builder (tests may mock a simpler builder)
-                const anyB = b as any;
-                if (typeof anyB.addRoleOption === 'function') {
-                    anyB.addRoleOption((opt: any) => opt
-                        .setName('role')
-                        .setDescription('Optionally notify members of this role')
-                        .setRequired(false)
-                    );
-                }
+                b.addRoleOption((opt: any) => opt
+                    .setName('role')
+                    .setDescription('Optionally notify members of this role')
+                    .setRequired(false)
+                );
                 return b;
             },
             process.env.GUILD_ID ? {guildIds: [process.env.GUILD_ID]} : undefined,

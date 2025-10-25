@@ -2,7 +2,8 @@ import {ApplyOptions} from "@sapphire/decorators";
 import {Command} from "@sapphire/framework";
 import type {Channel, ChatInputCommandInteraction} from "discord.js";
 import {Polls} from "../store/polls.js";
-import {componentsFor, renderPollContent, clampDiscordText, buildPollMessage} from "../util/pollRender.js";
+import {buildPollMessage, clampDiscordText} from "../util/pollRender.js";
+import {DefaultRole} from "../store/config.js";
 
 function log(...args: any[]) {
     // eslint-disable-next-line no-console
@@ -22,12 +23,39 @@ export default class PollCommand extends Command {
                     .setName(this.name)
                     .setDescription(this.description ?? "Manage polls")
                     .addSubcommand((s: any) => s.setName("list").setDescription("List open polls"))
-                    .addSubcommand((s: any) =>
+                    .addSubcommand((s: any) => s
+                        .setName("repost")
+                        .setDescription("Re-post a poll by ID (use when a poll message was deleted)")
+                        .addStringOption((o: any) => o
+                            .setName("id")
+                            .setDescription("Poll ID")
+                            .setRequired(true))
+                        .addChannelOption((o: any) => o
+                            .setName("channel")
+                            .setDescription("Channel to post in (defaults to current)")
+                            .setRequired(false)))
+                    .addSubcommand((s: any) => {
                         s
-                            .setName("repost")
-                            .setDescription("Re-post a poll by ID (use when a poll message was deleted)")
-                            .addStringOption((o: any) => o.setName("id").setDescription("Poll ID").setRequired(true))
-                            .addChannelOption((o: any) => o.setName("channel").setDescription("Channel to post in (defaults to current)").setRequired(false))),
+                            .setName("defaultrole")
+                            .setDescription("Admin: show or update default role for this channel")
+                            .addStringOption((o: any) => {
+                                o
+                                    .setName('action')
+                                    .setDescription('show | set | clear (defaults to show)')
+                                    .setRequired(false)
+                                    .addChoices(
+                                        {name: 'show', value: 'show'},
+                                        {name: 'set', value: 'set'},
+                                        {name: 'clear', value: 'clear'},
+                                    );
+                                return o;
+                            })
+                            .addRoleOption((o: any) => o
+                                .setName('role')
+                                .setDescription('Role to set as default (for action=set)')
+                                .setRequired(false));
+                        return s;
+                    }),
             process.env.GUILD_ID ? {guildIds: [process.env.GUILD_ID]} : undefined,
         );
         registry.registerContextMenuCommand(
@@ -43,7 +71,8 @@ export default class PollCommand extends Command {
         const sub = interaction.options.getSubcommand();
         log(`invoke: sub=${sub} guild=${interaction.guildId ?? 'dm'} channel=${(interaction.channel as any)?.id ?? 'unknown'}`);
         if (sub === "list") {
-            const open = Polls.allOpen();
+            // Show newest first so the most recent polls are not truncated by Discord's 2000 char limit
+            const open = [...Polls.allOpen()].reverse();
             log(`list: open=${open.length}`);
             if (open.length === 0) {
                 await interaction.reply({content: "No open polls.", ephemeral: true});
@@ -93,7 +122,11 @@ export default class PollCommand extends Command {
                     const oldChannel = await this.container.client.channels.fetch(poll.channelId as string).catch(() => null);
                     if (oldChannel && (oldChannel as any).isTextBased && typeof (oldChannel as any).isTextBased === "function") {
                         const oldMsg = await (oldChannel as any).messages.fetch(poll.messageId).catch(() => null);
-                        if (oldMsg) { await oldMsg.delete().catch(() => {}); log(`repost: deleted old message ${poll.messageId}`); }
+                        if (oldMsg) {
+                            await oldMsg.delete().catch(() => {
+                            });
+                            log(`repost: deleted old message ${poll.messageId}`);
+                        }
                     }
                 } catch (err: any) {
                     log(`repost: delete old failed:`, err?.message ?? err);
@@ -108,6 +141,52 @@ export default class PollCommand extends Command {
             log(`repost: posted poll=${poll.id} msg=${message.id} channel=${(textChannel as any).id}`);
 
             await interaction.reply({content: `Poll ${poll.id} re-posted.`, ephemeral: true});
+            return;
+        }
+
+        if (sub === 'defaultrole') {
+            // Inline admin check to keep tests working even when calling with a plain object for `this`
+            const member: any = interaction.member as any;
+            const isAdmin = !!(member && member.permissions && typeof member.permissions.has === 'function' && member.permissions.has('Administrator'));
+            if (!isAdmin) {
+                await interaction.reply({content: "Only an administrator can use this command.", ephemeral: true});
+                return;
+            }
+            if (!interaction.guild || !interaction.channel) {
+                await interaction.reply({
+                    content: "This command must be used in a guild text channel.",
+                    ephemeral: true
+                });
+                return;
+            }
+            const action = interaction.options.getString('action') ?? 'show';
+            const role = (interaction.options as any).getRole('role') as { id: string; name?: string } | null;
+            const guildId = interaction.guild.id;
+            const channelId = (interaction.channel as any).id as string;
+            if (action === 'show') {
+                const current = DefaultRole.get(guildId, channelId);
+                await interaction.reply({
+                    content: current ? `Default role for this channel: <@&${current}>` : 'No default role is set for this channel.',
+                    ephemeral: true
+                });
+                return;
+            }
+            if (action === 'clear') {
+                DefaultRole.clear(guildId, channelId);
+                await interaction.reply({content: 'Cleared the default role for this channel.', ephemeral: true});
+                return;
+            }
+            if (action === 'set') {
+                const rid = role?.id;
+                if (!rid) {
+                    await interaction.reply({content: 'Please specify a role to set.', ephemeral: true});
+                    return;
+                }
+                DefaultRole.set(guildId, channelId, rid);
+                await interaction.reply({content: `Default role set to <@&${rid}> for this channel.`, ephemeral: true});
+                return;
+            }
+            await interaction.reply({content: 'Unknown action. Use show | set | clear.', ephemeral: true});
             return;
         }
 
@@ -130,7 +209,8 @@ export default class PollCommand extends Command {
             const foundPoll = Polls.findByMessageId(message.id);
             if (!foundPoll) {
                 if (usedDefer && typeof interaction.editReply === 'function') {
-                    await interaction.editReply({content: "This message is not a poll."}).catch(() => {});
+                    await interaction.editReply({content: "This message is not a poll."}).catch(() => {
+                    });
                 } else {
                     await interaction.reply({content: "This message is not a poll.", ephemeral: true});
                 }
@@ -138,7 +218,8 @@ export default class PollCommand extends Command {
             }
             if (!foundPoll.closed) {
                 if (usedDefer && typeof interaction.editReply === 'function') {
-                    await interaction.editReply({content: "Poll is already open."}).catch(() => {});
+                    await interaction.editReply({content: "Poll is already open."}).catch(() => {
+                    });
                 } else {
                     await interaction.reply({content: "Poll is already open.", ephemeral: true});
                 }
@@ -169,7 +250,8 @@ export default class PollCommand extends Command {
                         const oldMsg = await (oldChannel as any).messages.fetch(foundPoll.messageId as string).catch(() => null);
                         if (oldMsg) {
                             const msgOpts = buildPollMessage(foundPoll);
-                            await oldMsg.edit(msgOpts as any).catch(() => {});
+                            await oldMsg.edit(msgOpts as any).catch(() => {
+                            });
                             log(`reopen: edited original message ${foundPoll.messageId}`);
                         }
                     }
@@ -179,7 +261,8 @@ export default class PollCommand extends Command {
             }
 
             if (usedDefer && typeof interaction.editReply === 'function') {
-                await interaction.editReply({content: `Poll ${foundPoll.id} has been reopened.`}).catch(() => {});
+                await interaction.editReply({content: `Poll ${foundPoll.id} has been reopened.`}).catch(() => {
+                });
             } else {
                 await interaction.reply({content: `Poll ${foundPoll.id} has been reopened.`, ephemeral: true});
             }
@@ -187,11 +270,18 @@ export default class PollCommand extends Command {
             console.error('Error handling Reopen poll context menu:', err);
             try {
                 if (typeof interaction.editReply === 'function' && (interaction.deferred || interaction.replied)) {
-                    await interaction.followUp({content: 'An internal error occurred while reopening the poll.', ephemeral: true});
+                    await interaction.followUp({
+                        content: 'An internal error occurred while reopening the poll.',
+                        ephemeral: true
+                    });
                 } else if (typeof interaction.editReply === 'function' && interaction.deferred) {
-                    await interaction.editReply({content: 'An internal error occurred while reopening the poll.'}).catch(() => {});
+                    await interaction.editReply({content: 'An internal error occurred while reopening the poll.'}).catch(() => {
+                    });
                 } else {
-                    await interaction.reply({content: 'An internal error occurred while reopening the poll.', ephemeral: true});
+                    await interaction.reply({
+                        content: 'An internal error occurred while reopening the poll.',
+                        ephemeral: true
+                    });
                 }
             } catch (_) {
                 // last resort: nothing we can do

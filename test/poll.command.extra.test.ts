@@ -47,8 +47,21 @@ describe('Poll command extra', () => {
                 const sub: any = {
                     setName: () => sub,
                     setDescription: () => sub,
-                    addStringOption: () => sub,
-                    addChannelOption: () => sub
+                    addStringOption: (fnOpt: Function) => {
+                        const opt: any = { setName() { return opt; }, setDescription() { return opt; }, setRequired() { return opt; }, addChoices() { return opt; } };
+                        fnOpt(opt);
+                        return sub;
+                    },
+                    addChannelOption: (fnOpt: Function) => {
+                        const opt: any = { setName() { return opt; }, setDescription() { return opt; }, setRequired() { return opt; } };
+                        fnOpt(opt);
+                        return sub;
+                    },
+                    addRoleOption: (fnOpt: Function) => {
+                        const opt: any = { setName() { return opt; }, setDescription() { return opt; }, setRequired() { return opt; } };
+                        fnOpt(opt);
+                        return sub;
+                    }
                 };
                 fn(sub);
                 return this;

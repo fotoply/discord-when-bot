@@ -28,11 +28,21 @@ describe('Poll command additional coverage', () => {
               setName: () => sub,
               setDescription: () => sub,
               addStringOption: (fnOpt: Function) => {
-                const opt: any = { setName() { return opt; }, setDescription() { return opt; }, setRequired() { return opt; } };
+                const opt: any = {
+                  setName() { return opt; },
+                  setDescription() { return opt; },
+                  setRequired() { return opt; },
+                  addChoices() { return opt; },
+                };
                 fnOpt(opt);
                 return sub;
               },
               addChannelOption: (fnOpt: Function) => {
+                const opt: any = { setName() { return opt; }, setDescription() { return opt; }, setRequired() { return opt; } };
+                fnOpt(opt);
+                return sub;
+              },
+              addRoleOption: (fnOpt: Function) => {
                 const opt: any = { setName() { return opt; }, setDescription() { return opt; }, setRequired() { return opt; } };
                 fnOpt(opt);
                 return sub;
