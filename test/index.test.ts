@@ -138,4 +138,33 @@ describe('reminder logic', () => {
         delete process.env.DISCORD_TOKEN;
         vi.unmock('@sapphire/framework');
     });
+
+    it('entry exported sendReminders delegates to util with overrides', async () => {
+        // Ensure token present to avoid early exit
+        process.env.DISCORD_TOKEN = 'tkn';
+        vi.doMock('@sapphire/framework', () => ({ SapphireClient: class { user = { tag: 'bot#0001', id: '123' }; constructor(_opts: any) {} login() { return Promise.resolve('ok'); } } as any }));
+
+        // Mock util reminders to capture calls
+        const mockSend = vi.fn(async () => {});
+        vi.doMock('../src/util/reminders.js', () => ({ sendReminders: mockSend }));
+
+        // Import entry and call exported helper
+        const entry = await import('../src/index.js');
+        // Provide global overrides used by entry helper
+        (globalThis as any).client = { foo: 'bar' };
+        (globalThis as any).Polls = { bar: 'baz' };
+
+        await entry.sendReminders();
+
+        expect(mockSend).toHaveBeenCalledTimes(1);
+        const firstCall = ((mockSend as any).mock.calls as any[])[0] as any[];
+        expect(firstCall[0]).toEqual({ foo: 'bar' });
+        expect(firstCall[1]).toEqual({ bar: 'baz' });
+
+        delete (globalThis as any).client;
+        delete (globalThis as any).Polls;
+        delete process.env.DISCORD_TOKEN;
+        vi.unmock('@sapphire/framework');
+        vi.unmock('../src/util/reminders.js');
+    });
 });
