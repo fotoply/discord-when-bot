@@ -6,12 +6,14 @@ import {buildFutureDates} from '../src/util/date.js';
 const modPromise = import('../src/commands/when.js');
 
 describe('When command', () => {
-    it('replies with two select rows and ephemeral true', async () => {
+    it('replies with two select rows (first, last) and ephemeral true', async () => {
         const mod = await modPromise;
         const WhenCommand = mod.default;
 
         const replySpy: any = vi.fn();
         const interaction = {
+            options: { getRole: vi.fn(() => null) },
+            user: { id: 'user-1' },
             reply: replySpy,
         } as any;
 

@@ -138,13 +138,29 @@ export async function sendReminders(client: Client, Polls: any, options?: SendRe
                 for (const userId of set) responded.add(userId);
             }
 
-            // Determine non-responders: all non-bot guild members not in responded
+            // If roles were specified for this poll, restrict candidates to members who have at least one of those roles
+            const roleSet: Set<string> | undefined = Array.isArray(poll.roles) && poll.roles.length ? new Set<string>(poll.roles) : undefined;
+
+            // Determine non-responders: all non-bot guild members not in responded (and in roles if set)
             const toPing: string[] = [];
             const iter = typeof cache.values === 'function' ? cache.values() : Object.values(cache);
             for (const member of iter as Iterable<GuildMember>) {
-                if ((member as any)?.user?.bot) continue;
-                if (responded.has((member as any).id)) continue;
-                toPing.push((member as any).id);
+                const m: any = member as any;
+                if (m?.user?.bot) continue;
+                if (roleSet) {
+                    const rolesForMember = m?.roles?.cache ? Array.from(m.roles.cache.keys?.() ?? m.roles.cache.keys?.()) : (Array.isArray(m?.roles) ? m.roles : undefined);
+                    let hasRole = false;
+                    if (Array.isArray(rolesForMember)) {
+                        for (const r of rolesForMember) { if (roleSet.has(String(r))) { hasRole = true; break; } }
+                    } else if (m?.roles && typeof m.roles === 'object' && typeof m.roles.cache === 'object') {
+                        for (const [rid] of (m.roles.cache as Map<string, any>).entries?.() ?? []) { if (roleSet.has(String(rid))) { hasRole = true; break; } }
+                    } else if (m?.roles?.cache && typeof m.roles.cache.forEach === 'function') {
+                        m.roles.cache.forEach((_v: any, k: string) => { if (roleSet.has(String(k))) hasRole = true; });
+                    }
+                    if (!hasRole) continue;
+                }
+                if (responded.has(m.id)) continue;
+                toPing.push(m.id);
             }
             log(`poll ${poll.id}: toPing=${toPing.length}`);
 

@@ -189,17 +189,26 @@ export default class InteractionCreateListener extends Listener<
             return;
         }
 
+        const roles = Sessions.getRoles(interaction.user.id);
         const poll = Polls.createPoll({
             channelId: interaction.channelId ?? "unknown",
             creatorId: interaction.user.id,
             dates,
+            roles,
         });
-        log('modal: created poll', poll.id, 'dates=', dates.length, 'channel=', interaction.channelId ?? 'unknown');
+        log('modal: created poll', poll.id, 'dates=', dates.length, 'channel=', interaction.channelId ?? 'unknown', 'roles=', roles?.length ?? 0);
 
         const extras = await this.buildGridExtras(poll, interaction);
         const message = buildPollMessage(poll, extras);
 
-        await interaction.reply(message);
+        // Prepend role mentions if any
+        const mentions = Array.isArray(poll.roles) && poll.roles.length ? poll.roles.map((r) => `<@&${r}>`).join(' ') : '';
+        const merged = { ...message } as any;
+        if (mentions) {
+            if (merged.content && merged.content.length) merged.content = `${mentions}\n${merged.content}`; else merged.content = mentions;
+        }
+
+        await interaction.reply(merged);
 
         const replyMsg = await interaction.fetchReply();
         Polls.setMessageId(poll.id, replyMsg.id);
@@ -301,19 +310,27 @@ export default class InteractionCreateListener extends Listener<
             return;
         }
 
+        const roles = Sessions.getRoles(interaction.user.id);
         const poll = Polls.createPoll({
-            channelId: interaction.channel.id,
+            channelId: (interaction.channel as any).id,
             creatorId: interaction.user.id,
             dates,
+            roles,
         });
-        log('last-select: created poll', poll.id, 'channel', interaction.channel.id);
+        log('last-select: created poll', poll.id, 'channel', (interaction.channel as any).id, 'roles=', roles?.length ?? 0);
         const extras = await this.buildGridExtras(poll, interaction);
         const messageOpts = buildPollMessage(poll, extras);
+
+        // Prepend role mentions if any
+        const mentions = Array.isArray(poll.roles) && poll.roles.length ? poll.roles.map((r) => `<@&${r}>`).join(' ') : '';
+        if (mentions) {
+            if (messageOpts.content && messageOpts.content.length) messageOpts.content = `${mentions}\n${messageOpts.content}`; else messageOpts.content = mentions;
+        }
 
         const message = await (interaction.channel as any).send(messageOpts as any);
         log('last-select: posted message', (message as any)?.id ?? 'unknown', 'for poll', poll.id);
 
-        Polls.setMessageId(poll.id, message.id);
+        Polls.setMessageId(poll.id, (message as any).id);
 
         await interaction.update({content: "Poll created!", components: []});
 

@@ -1,5 +1,6 @@
 type Session = {
     first?: string; // ISO date for first selection
+    roles?: string[]; // selected role ids for pings
 };
 
 class SessionStore {
@@ -13,6 +14,16 @@ class SessionStore {
 
     getFirst(userId: string): string | undefined {
         return this.map.get(userId)?.first;
+    }
+
+    setRoles(userId: string, roles: string[]) {
+        const s = this.map.get(userId) ?? {};
+        s.roles = [...new Set(roles)];
+        this.map.set(userId, s);
+    }
+
+    getRoles(userId: string): string[] | undefined {
+        return this.map.get(userId)?.roles;
     }
 
     clear(userId: string) {

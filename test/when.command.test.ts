@@ -9,12 +9,14 @@ vi.mock('@sapphire/framework', () => ({
 }));
 
 describe('When command', () => {
-    it('replies with two select components and uses date labels, and logs activity', async () => {
+    it('replies with two select components (first, last) and logs activity', async () => {
         const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
         const interaction: any = {
             guildId: 'g-when',
             channel: { id: 'c-when' },
+            options: { getRole: vi.fn(() => null) },
+            user: { id: 'user-1' },
             reply: vi.fn().mockResolvedValue(undefined),
         };
 
@@ -25,7 +27,7 @@ describe('When command', () => {
         const arg = interaction.reply.mock.calls[0][0];
         expect(arg.content).toContain('Select a date range');
         expect(Array.isArray(arg.components)).toBe(true);
-        // there should be two rows (first and last)
+        // there should be two rows (first, last)
         expect(arg.components.length).toBe(2);
 
         // Should have logged with the [when] prefix

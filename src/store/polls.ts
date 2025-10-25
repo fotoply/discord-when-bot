@@ -14,6 +14,7 @@ export type Poll = {
     viewMode?: "list" | "grid";
     // ID of the last reminder message posted in the channel, if any
     reminderMessageId?: string;
+    roles?: string[]; // role ids to notify / restrict reminders
 };
 
 class PollStore {
@@ -23,6 +24,7 @@ class PollStore {
         channelId: string;
         creatorId: string;
         dates: string[];
+        roles?: string[];
     }): Poll {
         const id = randomUUID().slice(0, 12);
         const selections = new Map<string, Set<string>>();
@@ -37,12 +39,13 @@ class PollStore {
             selections,
             closed: false,
             viewMode: "list",
+            roles: input.roles && input.roles.length ? [...new Set(input.roles)] : undefined,
         };
         // Persist in a transaction
         const trx = db.transaction(() => {
             db.prepare(
-                "INSERT INTO polls (id, channel_id, creator_id, closed) VALUES (?, ?, ?, 0)",
-            ).run(id, input.channelId, input.creatorId);
+                "INSERT INTO polls (id, channel_id, creator_id, closed, roles) VALUES (?, ?, ?, 0, ?)",
+            ).run(id, input.channelId, input.creatorId, poll.roles ? JSON.stringify(poll.roles) : null);
             const stmt = db.prepare(
                 "INSERT INTO poll_dates (poll_id, date) VALUES (?, ?)",
             );
@@ -257,7 +260,7 @@ class PollStore {
         // Load a poll from DB
         const row = db
             .prepare(
-                "SELECT id, channel_id AS channelId, creator_id AS creatorId, message_id AS messageId, closed, COALESCE(view_mode, 'list') AS viewMode, reminder_message_id AS reminderMessageId FROM polls WHERE id = ?",
+                "SELECT id, channel_id AS channelId, creator_id AS creatorId, message_id AS messageId, closed, COALESCE(view_mode, 'list') AS viewMode, reminder_message_id AS reminderMessageId, roles FROM polls WHERE id = ?",
             )
             .get(pollId) as
             | {
@@ -268,6 +271,7 @@ class PollStore {
             closed: number;
             viewMode?: "list" | "grid";
             reminderMessageId?: string;
+            roles?: string | null;
         }
             | undefined;
         if (!row) return undefined;
@@ -286,6 +290,13 @@ class PollStore {
             if (!selections.has(v.date)) selections.set(v.date, new Set());
             selections.get(v.date)!.add(v.user_id);
         }
+
+        let roles: string[] | undefined;
+        if (row.roles) {
+            try { roles = JSON.parse(row.roles); } catch { roles = undefined; }
+            if (Array.isArray(roles) && roles.length === 0) roles = undefined;
+        }
+
         const poll: Poll = {
             id: row.id,
             channelId: row.channelId,
@@ -296,6 +307,7 @@ class PollStore {
             closed: row.closed === 1,
             viewMode: row.viewMode ?? "list",
             reminderMessageId: row.reminderMessageId ?? undefined,
+            roles,
         };
         this.polls.set(pollId, poll);
         return poll;

@@ -23,7 +23,10 @@ db.exec(`
         channel_id TEXT    NOT NULL,
         creator_id TEXT    NOT NULL,
         message_id TEXT,
-        closed     INTEGER NOT NULL DEFAULT 0
+        closed     INTEGER NOT NULL DEFAULT 0,
+        view_mode  TEXT    NOT NULL DEFAULT 'list',
+        reminder_message_id TEXT,
+        roles      TEXT
     );
 
     CREATE TABLE IF NOT EXISTS poll_dates
@@ -57,7 +60,7 @@ db.exec(`
     );
 `);
 
-// Lightweight migration: ensure polls.view_mode exists
+// Lightweight migration: ensure polls.view_mode, reminder_message_id, and roles exist
 try {
     const cols = db.prepare("PRAGMA table_info(polls)").all() as Array<{ name: string }>;
     const hasViewMode = cols.some((c) => c.name === "view_mode");
@@ -67,6 +70,10 @@ try {
     const hasReminderMsg = cols.some((c) => c.name === "reminder_message_id");
     if (!hasReminderMsg) {
         db.exec("ALTER TABLE polls ADD COLUMN reminder_message_id TEXT");
+    }
+    const hasRoles = cols.some((c) => c.name === "roles");
+    if (!hasRoles) {
+        db.exec("ALTER TABLE polls ADD COLUMN roles TEXT");
     }
 } catch (e) {
     // Best effort; tests will reveal if anything goes wrong

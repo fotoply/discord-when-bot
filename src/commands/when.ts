@@ -3,6 +3,7 @@ import {Command} from "@sapphire/framework";
 import type {ChatInputCommandInteraction} from "discord.js";
 import {ActionRowBuilder, StringSelectMenuBuilder} from "discord.js";
 import {buildFutureDates, formatDateLabel} from "../util/date.js";
+import { Sessions } from "../store/sessions.js";
 
 function log(...args: any[]) {
     // eslint-disable-next-line no-console
@@ -16,16 +17,32 @@ function log(...args: any[]) {
 export default class WhenCommand extends Command {
     public override registerApplicationCommands(registry: Command.Registry) {
         registry.registerChatInputCommand(
-            (builder) =>
-                builder
+            (builder) => {
+                const b = builder
                     .setName(this.name)
-                    .setDescription(this.description ?? "Create an availability poll"),
+                    .setDescription(this.description ?? "Create an availability poll");
+                // Add optional role parameter if supported by the builder (tests may mock a simpler builder)
+                const anyB = b as any;
+                if (typeof anyB.addRoleOption === 'function') {
+                    anyB.addRoleOption((opt: any) => opt
+                        .setName('role')
+                        .setDescription('Optionally notify members of this role')
+                        .setRequired(false)
+                    );
+                }
+                return b;
+            },
             process.env.GUILD_ID ? {guildIds: [process.env.GUILD_ID]} : undefined,
         );
     }
 
     public override async chatInputRun(interaction: ChatInputCommandInteraction) {
         const isoDates = buildFutureDates(20);
+        const role = (interaction.options as any)?.getRole?.('role') as { id: string } | null | undefined;
+        // Persist selected role id in session for this user during the flow (guard for tests that omit user)
+        if ((interaction as any)?.user?.id) {
+            Sessions.setRoles((interaction.user as any).id, role?.id ? [role.id] : []);
+        }
         log(`invoke: guild=${interaction.guildId ?? 'dm'} channel=${(interaction.channel as any)?.id ?? 'unknown'} dates=${isoDates.length}`);
 
         const firstSelect = new StringSelectMenuBuilder()
