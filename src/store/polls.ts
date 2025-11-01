@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { db } from "./db.js";
+import { queryAll, queryOne } from "./sql.js";
 
 export const NONE_SELECTION = "__none__";
 
@@ -15,6 +16,18 @@ export type Poll = {
   // ID of the last reminder message posted in the channel, if any
   reminderMessageId?: string;
   roles?: string[]; // role ids to notify / restrict reminders
+};
+
+// Row shapes for DB hydration
+type PollRow = {
+  id: string;
+  channelId: string;
+  creatorId: string;
+  messageId?: string;
+  closed: number;
+  viewMode?: "list" | "grid";
+  reminderMessageId?: string;
+  roles?: string | null;
 };
 
 class PollStore {
@@ -244,9 +257,9 @@ class PollStore {
   // Return all open polls (hydrated)
   allOpen(): Poll[] {
     // Order by insertion so callers can reverse to get newest-first reliably
-    const rows = db
-      .prepare("SELECT id FROM polls WHERE closed = 0 ORDER BY rowid ASC")
-      .all() as { id: string }[];
+    const rows = queryAll<{ id: string }>(
+      "SELECT id FROM polls WHERE closed = 0 ORDER BY rowid ASC",
+    );
     const out: Poll[] = [];
     for (const r of rows) {
       const p = this.get(r.id);
@@ -260,45 +273,31 @@ class PollStore {
       if (poll.messageId === messageId) return poll;
     }
     // If not found in memory, try to locate the poll in the DB by message_id and hydrate it.
-    const row = db
-      .prepare(
-        "SELECT id, closed FROM polls WHERE message_id = ? ORDER BY rowid DESC LIMIT 1",
-      )
-      .get(messageId) as { id: string; closed: number } | undefined;
+    const row = queryOne<{ id: string; closed: number }>(
+      "SELECT id, closed FROM polls WHERE message_id = ? ORDER BY rowid DESC LIMIT 1",
+      messageId,
+    );
     if (!row) return undefined;
     return this.hydrate(row.id);
   }
 
   private hydrate(pollId: string): Poll | undefined {
     // Load a poll from DB
-    const row = db
-      .prepare(
-        "SELECT id, channel_id AS channelId, creator_id AS creatorId, message_id AS messageId, closed, COALESCE(view_mode, 'list') AS viewMode, reminder_message_id AS reminderMessageId, roles FROM polls WHERE id = ?",
-      )
-      .get(pollId) as
-      | {
-          id: string;
-          channelId: string;
-          creatorId: string;
-          messageId?: string;
-          closed: number;
-          viewMode?: "list" | "grid";
-          reminderMessageId?: string;
-          roles?: string | null;
-        }
-      | undefined;
+    const row = queryOne<PollRow>(
+      "SELECT id, channel_id AS channelId, creator_id AS creatorId, message_id AS messageId, closed, COALESCE(view_mode, 'list') AS viewMode, reminder_message_id AS reminderMessageId, roles FROM polls WHERE id = ?",
+      pollId,
+    );
     if (!row) return undefined;
-    const dates = db
-      .prepare(
-        "SELECT date FROM poll_dates WHERE poll_id = ? ORDER BY date ASC",
-      )
-      .all(pollId)
-      .map((r: any) => r.date as string);
+    const dates = queryAll<{ date: string }>(
+      "SELECT date FROM poll_dates WHERE poll_id = ? ORDER BY date ASC",
+      pollId,
+    ).map((r) => r.date);
     const selections = new Map<string, Set<string>>();
     for (const d of dates) selections.set(d, new Set());
-    const votes = db
-      .prepare("SELECT date, user_id FROM poll_votes WHERE poll_id = ?")
-      .all(pollId) as Array<{ date: string; user_id: string }>;
+    const votes = queryAll<{ date: string; user_id: string }>(
+      "SELECT date, user_id FROM poll_votes WHERE poll_id = ?",
+      pollId,
+    );
     for (const v of votes) {
       if (!selections.has(v.date)) selections.set(v.date, new Set());
       selections.get(v.date)!.add(v.user_id);
@@ -333,3 +332,5 @@ class PollStore {
 }
 
 export const Polls = new PollStore();
+
+

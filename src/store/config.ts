@@ -1,32 +1,37 @@
-import { db } from "./db.js";
+import { exec, queryAll, queryOne } from "./sql.js";
 
 export type ChannelKV = Record<string, string>;
 
 export const ChannelConfig = {
   // Get a specific key value for a channel
   get(guildId: string, channelId: string, key: string): string | undefined {
-    const row = db
-      .prepare(
-        "SELECT value FROM channel_config WHERE guild_id = ? AND channel_id = ? AND key = ?",
-      )
-      .get(guildId, channelId, key) as { value: string } | undefined;
+    const row = queryOne<{ value: string }>(
+      "SELECT value FROM channel_config WHERE guild_id = ? AND channel_id = ? AND key = ?",
+      guildId,
+      channelId,
+      key,
+    );
     return row?.value;
   },
 
   // Set a specific key value for a channel
   set(guildId: string, channelId: string, key: string, value: string) {
-    db.prepare(
+    exec(
       "INSERT INTO channel_config (guild_id, channel_id, key, value) VALUES (?, ?, ?, ?) ON CONFLICT(guild_id, channel_id, key) DO UPDATE SET value = excluded.value",
-    ).run(guildId, channelId, key, value);
+      guildId,
+      channelId,
+      key,
+      value,
+    );
   },
 
   // Get all keys for a channel
   all(guildId: string, channelId: string): ChannelKV {
-    const rows = db
-      .prepare(
-        "SELECT key, value FROM channel_config WHERE guild_id = ? AND channel_id = ?",
-      )
-      .all(guildId, channelId) as Array<{ key: string; value: string }>;
+    const rows = queryAll<{ key: string; value: string }>(
+      "SELECT key, value FROM channel_config WHERE guild_id = ? AND channel_id = ?",
+      guildId,
+      channelId,
+    );
     const out: ChannelKV = {};
     for (const r of rows) out[r.key] = r.value;
     return out;
@@ -34,9 +39,12 @@ export const ChannelConfig = {
 
   // Remove a key
   delete(guildId: string, channelId: string, key: string) {
-    db.prepare(
+    exec(
       "DELETE FROM channel_config WHERE guild_id = ? AND channel_id = ? AND key = ?",
-    ).run(guildId, channelId, key);
+      guildId,
+      channelId,
+      key,
+    );
   },
 };
 
