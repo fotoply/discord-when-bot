@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Prevent dotenv from loading during tests
-vi.doMock('dotenv/config', () => ({}));
+vi.doMock("dotenv/config", () => ({}));
 
-describe('index scheduler and helper coverage', () => {
+describe("index scheduler and helper coverage", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.useFakeTimers();
@@ -11,24 +11,29 @@ describe('index scheduler and helper coverage', () => {
   afterEach(() => {
     vi.useRealTimers();
     delete process.env.DISCORD_TOKEN;
-    vi.unmock('@sapphire/framework');
-    vi.unmock('../src/util/reminders.js');
+    vi.unmock("@sapphire/framework");
+    vi.unmock("../src/util/reminders.js");
   });
 
-  it('schedules hourly reminders: initial timeout then interval tick', async () => {
-    process.env.DISCORD_TOKEN = 'token';
+  it("schedules hourly reminders: initial timeout then interval tick", async () => {
+    process.env.DISCORD_TOKEN = "token";
 
     // Mock SapphireClient to avoid real side-effects
-    vi.doMock('@sapphire/framework', () => ({
-      SapphireClient: class { user = { tag: 'bot#0001', id: '1' }; login() { return Promise.resolve('ok'); } },
+    vi.doMock("@sapphire/framework", () => ({
+      SapphireClient: class {
+        user = { tag: "bot#0001", id: "1" };
+        login() {
+          return Promise.resolve("ok");
+        }
+      },
     }));
 
     // Mock reminders util to observe calls
     const sendMock = vi.fn(async () => {});
-    vi.doMock('../src/util/reminders.js', () => ({ sendReminders: sendMock }));
+    vi.doMock("../src/util/reminders.js", () => ({ sendReminders: sendMock }));
 
     // Import entry; this kicks off scheduleHourlyReminders
-    const entry = await import('../src/index.js');
+    const entry = await import("../src/index.js");
 
     // Let microtasks run (client.login then log)
     await Promise.resolve();
@@ -50,4 +55,3 @@ describe('index scheduler and helper coverage', () => {
     expect(sendMock).toHaveBeenCalledTimes(3);
   });
 });
-

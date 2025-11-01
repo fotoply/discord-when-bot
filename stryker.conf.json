@@ -1,8 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/stryker-mutator/stryker/master/packages/core/schema/stryker-schema.json",
-  "mutate": [
-    "src/**/*.ts"
-  ],
+  "mutate": ["src/**/*.ts"],
   "testRunner": "vitest",
   "coverageAnalysis": "perTest",
   "packageManager": "npm",

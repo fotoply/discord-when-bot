@@ -30,12 +30,14 @@ This document collects the details we keep out of the README to keep it friendly
 ## Data model (SQLite)
 
 Tables:
+
 - `polls(id, channel_id, creator_id, message_id, closed, view_mode, reminder_message_id)`
 - `poll_dates(poll_id, date)`
 - `poll_votes(poll_id, date, user_id)`
 - `channel_config(guild_id, channel_id, key, value)`
 
 Notes:
+
 - Foreign keys are enforced.
 - Writes to votes are wrapped to keep ‘none’ vs real date toggles consistent.
 - `reminder_message_id` stores the first (lead) reminder message id so we can delete/replace on the next send.
@@ -44,11 +46,10 @@ Notes:
 
 - Buttons: one per real date (plus a control row with “Toggle all”, “Switch view”, “Close poll”).
 - NONE selection (`__none__`) is always present as a button, but excluded from the per‑date list in text.
-- Text strategy (
-`buildPollMessage` in `src/util/pollRender.ts`):
-  1) Try full list (mentions per date)
-  2) If >2000 chars, switch to compact (counts only)
-  3) If still >2000, clamp with a visible suffix `… (truncated)`
+- Text strategy (`buildPollMessage` in `src/util/pollRender.ts`):
+  1. Try full list (mentions per date)
+  2. If >2000 chars, switch to compact (counts only)
+  3. If still >2000, clamp with a visible suffix `… (truncated)`
 - Grid view: when enabled or for closed polls, an image is attached (no embed for closed). Labels are shortened with `fitDisplayLabel`.
 
 ## Reminder scheduling & splitting
@@ -98,4 +99,3 @@ npm run coverage
 
 - Commands missing? For global registration, Discord can take up to ~1 hour. For instant dev, set `GUILD_ID`.
 - Node version issues? Ensure Node 20.x; see `engines` in `package.json`.
-

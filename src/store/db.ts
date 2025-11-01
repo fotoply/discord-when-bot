@@ -4,10 +4,10 @@ import Database from "better-sqlite3";
 
 // Use WHEN_DB_PATH if provided; otherwise default to the production DB path under data/
 const defaultPath =
-    process.env.WHEN_DB_PATH || path.join(process.cwd(), "data", "when.db");
+  process.env.WHEN_DB_PATH || path.join(process.cwd(), "data", "when.db");
 
 const dir = path.dirname(defaultPath);
-if (!fs.existsSync(dir)) fs.mkdirSync(dir, {recursive: true});
+if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
 export const db = new Database(defaultPath);
 
@@ -62,19 +62,23 @@ db.exec(`
 
 // Lightweight migration: ensure polls.view_mode, reminder_message_id, and roles exist
 try {
-    const cols = db.prepare("PRAGMA table_info(polls)").all() as Array<{ name: string }>;
-    const hasViewMode = cols.some((c) => c.name === "view_mode");
-    if (!hasViewMode) {
-        db.exec("ALTER TABLE polls ADD COLUMN view_mode TEXT NOT NULL DEFAULT 'list'");
-    }
-    const hasReminderMsg = cols.some((c) => c.name === "reminder_message_id");
-    if (!hasReminderMsg) {
-        db.exec("ALTER TABLE polls ADD COLUMN reminder_message_id TEXT");
-    }
-    const hasRoles = cols.some((c) => c.name === "roles");
-    if (!hasRoles) {
-        db.exec("ALTER TABLE polls ADD COLUMN roles TEXT");
-    }
+  const cols = db.prepare("PRAGMA table_info(polls)").all() as Array<{
+    name: string;
+  }>;
+  const hasViewMode = cols.some((c) => c.name === "view_mode");
+  if (!hasViewMode) {
+    db.exec(
+      "ALTER TABLE polls ADD COLUMN view_mode TEXT NOT NULL DEFAULT 'list'",
+    );
+  }
+  const hasReminderMsg = cols.some((c) => c.name === "reminder_message_id");
+  if (!hasReminderMsg) {
+    db.exec("ALTER TABLE polls ADD COLUMN reminder_message_id TEXT");
+  }
+  const hasRoles = cols.some((c) => c.name === "roles");
+  if (!hasRoles) {
+    db.exec("ALTER TABLE polls ADD COLUMN roles TEXT");
+  }
 } catch (e) {
-    // Best effort; tests will reveal if anything goes wrong
+  // Best effort; tests will reveal if anything goes wrong
 }

@@ -1,65 +1,74 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // We import the util directly and pass mocks; no need to mock dotenv or framework here
-import { sendReminders } from '../src/util/reminders.js';
-import { ReminderSettings, ChannelConfig } from '../src/store/config.js';
+import { sendReminders } from "../src/util/reminders.js";
+import { ReminderSettings, ChannelConfig } from "../src/store/config.js";
 
 function makeSelections(respondedIds: string[] = [], includeNone = true) {
   const map = new Map<string, Set<string>>();
-  map.set('2025-09-22', new Set(respondedIds));
-  if (includeNone) map.set('__none__', new Set());
+  map.set("2025-09-22", new Set(respondedIds));
+  if (includeNone) map.set("__none__", new Set());
   return map;
 }
 
-describe('util/reminders', () => {
+describe("util/reminders", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('pings only non-responders, deletes previous reminder, and persists new id', async () => {
+  it("pings only non-responders, deletes previous reminder, and persists new id", async () => {
     const poll = {
-      id: 'p1',
-      channelId: 'c1',
-      messageId: 'poll-msg',
-      selections: makeSelections(['u1']),
-      reminderMessageId: 'old-1',
+      id: "p1",
+      channelId: "c1",
+      messageId: "poll-msg",
+      selections: makeSelections(["u1"]),
+      reminderMessageId: "old-1",
     };
     const setReminderMessageId = vi.fn();
     const Polls = { allOpen: vi.fn(() => [poll]), setReminderMessageId } as any;
 
-    const sendMock = vi.fn(() => Promise.resolve({ id: 'new-1' }));
+    const sendMock = vi.fn(() => Promise.resolve({ id: "new-1" }));
     const deleteMock = vi.fn(() => Promise.resolve());
 
     const members = new Map<string, any>([
-      ['u1', { id: 'u1', user: { bot: false } }], // responded
-      ['u2', { id: 'u2', user: { bot: false } }], // non-responder
-      ['b1', { id: 'b1', user: { bot: true } }],  // bot
+      ["u1", { id: "u1", user: { bot: false } }], // responded
+      ["u2", { id: "u2", user: { bot: false } }], // non-responder
+      ["b1", { id: "b1", user: { bot: true } }], // bot
     ]);
     const guild = { members: { cache: members, fetch: vi.fn() } };
-    const channel = { guild, send: sendMock, messages: { delete: deleteMock } } as any;
-    const client = { channels: { fetch: vi.fn(() => Promise.resolve(channel)) } } as any;
+    const channel = {
+      guild,
+      send: sendMock,
+      messages: { delete: deleteMock },
+    } as any;
+    const client = {
+      channels: { fetch: vi.fn(() => Promise.resolve(channel)) },
+    } as any;
 
     await sendReminders(client, Polls);
 
-    expect(deleteMock).toHaveBeenCalledWith('old-1');
+    expect(deleteMock).toHaveBeenCalledWith("old-1");
     expect(sendMock).toHaveBeenCalledTimes(1);
-    const firstCall = ((sendMock.mock.calls as unknown) as any[])[0] as any[];
+    const firstCall = (sendMock.mock.calls as unknown as any[])[0] as any[];
     const firstArg = firstCall[0] as any;
     const { content } = firstArg;
-    expect(content).toContain('Reminder:');
-    expect(content).toContain('<@u2>');
-    expect(content).not.toContain('<@u1>');
+    expect(content).toContain("Reminder:");
+    expect(content).toContain("<@u2>");
+    expect(content).not.toContain("<@u1>");
     // new: ensure reminders reply to the poll message when available
-    expect(firstArg.reply).toEqual({ messageReference: 'poll-msg', failIfNotExists: false });
-    expect(setReminderMessageId).toHaveBeenCalledWith('p1', 'new-1');
+    expect(firstArg.reply).toEqual({
+      messageReference: "poll-msg",
+      failIfNotExists: false,
+    });
+    expect(setReminderMessageId).toHaveBeenCalledWith("p1", "new-1");
   });
 
-  it('skips sending and only clears previous reminder if no one to ping', async () => {
+  it("skips sending and only clears previous reminder if no one to ping", async () => {
     const poll = {
-      id: 'p2',
-      channelId: 'c2',
-      selections: makeSelections(['u1']),
-      reminderMessageId: 'old-2',
+      id: "p2",
+      channelId: "c2",
+      selections: makeSelections(["u1"]),
+      reminderMessageId: "old-2",
     };
     // Only u1 exists in guild -> everyone responded
     const setReminderMessageId = vi.fn();
@@ -68,119 +77,150 @@ describe('util/reminders', () => {
     const sendMock = vi.fn();
     const deleteMock = vi.fn(() => Promise.resolve());
 
-    const members = new Map<string, any>([['u1', { id: 'u1', user: { bot: false } }]]);
+    const members = new Map<string, any>([
+      ["u1", { id: "u1", user: { bot: false } }],
+    ]);
     const guild = { members: { cache: members, fetch: vi.fn() } };
-    const channel = { guild, send: sendMock, messages: { delete: deleteMock } } as any;
-    const client = { channels: { fetch: vi.fn(() => Promise.resolve(channel)) } } as any;
+    const channel = {
+      guild,
+      send: sendMock,
+      messages: { delete: deleteMock },
+    } as any;
+    const client = {
+      channels: { fetch: vi.fn(() => Promise.resolve(channel)) },
+    } as any;
 
     await sendReminders(client, Polls);
 
-    expect(deleteMock).toHaveBeenCalledWith('old-2');
+    expect(deleteMock).toHaveBeenCalledWith("old-2");
     // should clear stored reminder id
-    expect(setReminderMessageId).toHaveBeenCalledWith('p2', undefined);
+    expect(setReminderMessageId).toHaveBeenCalledWith("p2", undefined);
     expect(sendMock).not.toHaveBeenCalled();
   });
 
-  it('supports object-based member cache (no Map)', async () => {
+  it("supports object-based member cache (no Map)", async () => {
     const poll = {
-      id: 'p3',
-      channelId: 'c3',
-      selections: makeSelections(['u1']),
+      id: "p3",
+      channelId: "c3",
+      selections: makeSelections(["u1"]),
     };
     const setReminderMessageId = vi.fn();
     const Polls = { allOpen: vi.fn(() => [poll]), setReminderMessageId } as any;
 
-    const sendMock = vi.fn(() => Promise.resolve({ id: 'new-3' }));
+    const sendMock = vi.fn(() => Promise.resolve({ id: "new-3" }));
     const deleteMock = vi.fn(() => Promise.resolve());
 
     const cacheObj = {
-      a: { id: 'u1', user: { bot: false } },
-      b: { id: 'u2', user: { bot: false } },
-      c: { id: 'b1', user: { bot: true } },
+      a: { id: "u1", user: { bot: false } },
+      b: { id: "u2", user: { bot: false } },
+      c: { id: "b1", user: { bot: true } },
     };
     const guild = { members: { cache: cacheObj, fetch: vi.fn() } } as any;
-    const channel = { guild, send: sendMock, messages: { delete: deleteMock } } as any;
-    const client = { channels: { fetch: vi.fn(() => Promise.resolve(channel)) } } as any;
+    const channel = {
+      guild,
+      send: sendMock,
+      messages: { delete: deleteMock },
+    } as any;
+    const client = {
+      channels: { fetch: vi.fn(() => Promise.resolve(channel)) },
+    } as any;
 
     await sendReminders(client, Polls);
 
     expect(sendMock).toHaveBeenCalledTimes(1);
-    const firstCall = ((sendMock.mock.calls as unknown) as any[])[0] as any[];
+    const firstCall = (sendMock.mock.calls as unknown as any[])[0] as any[];
     const firstArg = firstCall[0] as any;
     const { content } = firstArg;
-    expect(content).toContain('<@u2>');
-    expect(content).not.toContain('<@u1>');
+    expect(content).toContain("<@u2>");
+    expect(content).not.toContain("<@u1>");
   });
 
-  it('ignores channels that cannot send messages', async () => {
-    const poll = { id: 'p4', channelId: 'c4', selections: makeSelections([]) };
+  it("ignores channels that cannot send messages", async () => {
+    const poll = { id: "p4", channelId: "c4", selections: makeSelections([]) };
     const setReminderMessageId = vi.fn();
     const Polls = { allOpen: vi.fn(() => [poll]), setReminderMessageId } as any;
 
-    const channel = { guild: { members: { cache: new Map(), fetch: vi.fn() } } } as any; // no send, no messages
-    const client = { channels: { fetch: vi.fn(() => Promise.resolve(channel)) } } as any;
+    const channel = {
+      guild: { members: { cache: new Map(), fetch: vi.fn() } },
+    } as any; // no send, no messages
+    const client = {
+      channels: { fetch: vi.fn(() => Promise.resolve(channel)) },
+    } as any;
 
     await sendReminders(client, Polls);
 
     expect(setReminderMessageId).not.toHaveBeenCalled();
   });
 
-  it('catches errors per poll and continues', async () => {
-    const poll = { id: 'p5', channelId: 'c5', selections: makeSelections([]) };
+  it("catches errors per poll and continues", async () => {
+    const poll = { id: "p5", channelId: "c5", selections: makeSelections([]) };
     const Polls = { allOpen: vi.fn(() => [poll]) } as any;
 
-    const client = { channels: { fetch: vi.fn(() => Promise.reject(new Error('fail'))) } } as any;
+    const client = {
+      channels: { fetch: vi.fn(() => Promise.reject(new Error("fail"))) },
+    } as any;
 
     await expect(sendReminders(client, Polls)).resolves.toBeUndefined();
   });
 
-  it('sends a reminder for each open poll independently', async () => {
+  it("sends a reminder for each open poll independently", async () => {
     // Two polls, both with non-responders and prior reminders
     const pollA = {
-      id: 'pa',
-      channelId: 'ca',
-      messageId: 'poll-msg-a',
-      selections: makeSelections(['ua1']),
-      reminderMessageId: 'old-a',
+      id: "pa",
+      channelId: "ca",
+      messageId: "poll-msg-a",
+      selections: makeSelections(["ua1"]),
+      reminderMessageId: "old-a",
     };
     const pollB = {
-      id: 'pb',
-      channelId: 'cb',
-      messageId: 'poll-msg-b',
-      selections: makeSelections(['ub1']),
-      reminderMessageId: 'old-b',
+      id: "pb",
+      channelId: "cb",
+      messageId: "poll-msg-b",
+      selections: makeSelections(["ub1"]),
+      reminderMessageId: "old-b",
     };
     const setReminderMessageId = vi.fn();
-    const Polls = { allOpen: vi.fn(() => [pollA, pollB]), setReminderMessageId } as any;
+    const Polls = {
+      allOpen: vi.fn(() => [pollA, pollB]),
+      setReminderMessageId,
+    } as any;
 
     // Channel A mocks
-    const sendA = vi.fn(() => Promise.resolve({ id: 'new-a' }));
+    const sendA = vi.fn(() => Promise.resolve({ id: "new-a" }));
     const delA = vi.fn(() => Promise.resolve());
     const membersA = new Map<string, any>([
-      ['ua1', { id: 'ua1', user: { bot: false } }], // responded
-      ['ua2', { id: 'ua2', user: { bot: false } }], // to ping
-      ['ba1', { id: 'ba1', user: { bot: true } }],
+      ["ua1", { id: "ua1", user: { bot: false } }], // responded
+      ["ua2", { id: "ua2", user: { bot: false } }], // to ping
+      ["ba1", { id: "ba1", user: { bot: true } }],
     ]);
     const guildA = { members: { cache: membersA, fetch: vi.fn() } };
-    const chanA = { guild: guildA, send: sendA, messages: { delete: delA } } as any;
+    const chanA = {
+      guild: guildA,
+      send: sendA,
+      messages: { delete: delA },
+    } as any;
 
     // Channel B mocks
-    const sendB = vi.fn(() => Promise.resolve({ id: 'new-b' }));
+    const sendB = vi.fn(() => Promise.resolve({ id: "new-b" }));
     const delB = vi.fn(() => Promise.resolve());
     const membersB = new Map<string, any>([
-      ['ub1', { id: 'ub1', user: { bot: false } }], // responded
-      ['ub2', { id: 'ub2', user: { bot: false } }], // to ping
-      ['bb1', { id: 'bb1', user: { bot: true } }],
+      ["ub1", { id: "ub1", user: { bot: false } }], // responded
+      ["ub2", { id: "ub2", user: { bot: false } }], // to ping
+      ["bb1", { id: "bb1", user: { bot: true } }],
     ]);
     const guildB = { members: { cache: membersB, fetch: vi.fn() } };
-    const chanB = { guild: guildB, send: sendB, messages: { delete: delB } } as any;
+    const chanB = {
+      guild: guildB,
+      send: sendB,
+      messages: { delete: delB },
+    } as any;
 
     // Client fetch returns channel per id
     const client = {
       channels: {
         fetch: vi.fn((id: string) => {
-          if (id === 'ca') return Promise.resolve(chanA);
-          if (id === 'cb') return Promise.resolve(chanB);
+          if (id === "ca") return Promise.resolve(chanA);
+          if (id === "cb") return Promise.resolve(chanB);
           return Promise.resolve(null);
         }),
       },
@@ -189,128 +229,154 @@ describe('util/reminders', () => {
     await sendReminders(client, Polls);
 
     // Both prior reminders deleted
-    expect(delA).toHaveBeenCalledWith('old-a');
-    expect(delB).toHaveBeenCalledWith('old-b');
+    expect(delA).toHaveBeenCalledWith("old-a");
+    expect(delB).toHaveBeenCalledWith("old-b");
 
     // Both channels send one message each
     expect(sendA).toHaveBeenCalledTimes(1);
     expect(sendB).toHaveBeenCalledTimes(1);
 
-    const contentA = (((sendA.mock.calls as unknown) as any[])[0] as any[])[0].content as string;
-    const contentB = (((sendB.mock.calls as unknown) as any[])[0] as any[])[0].content as string;
-    expect(contentA).toContain('<@ua2>');
-    expect(contentB).toContain('<@ub2>');
+    const contentA = ((sendA.mock.calls as unknown as any[])[0] as any[])[0]
+      .content as string;
+    const contentB = ((sendB.mock.calls as unknown as any[])[0] as any[])[0]
+      .content as string;
+    expect(contentA).toContain("<@ua2>");
+    expect(contentB).toContain("<@ub2>");
 
     // Persist new reminder ids per poll
-    expect(setReminderMessageId).toHaveBeenCalledWith('pa', 'new-a');
-    expect(setReminderMessageId).toHaveBeenCalledWith('pb', 'new-b');
+    expect(setReminderMessageId).toHaveBeenCalledWith("pa", "new-a");
+    expect(setReminderMessageId).toHaveBeenCalledWith("pb", "new-b");
   });
 
-  it('works when guild.members.fetch is undefined (no-op) and still sends', async () => {
+  it("works when guild.members.fetch is undefined (no-op) and still sends", async () => {
     const poll = {
-      id: 'p6',
-      channelId: 'c6',
-      messageId: 'poll-msg',
-      selections: makeSelections(['u1']),
+      id: "p6",
+      channelId: "c6",
+      messageId: "poll-msg",
+      selections: makeSelections(["u1"]),
     };
     const setReminderMessageId = vi.fn();
     const Polls = { allOpen: vi.fn(() => [poll]), setReminderMessageId } as any;
 
-    const sendMock = vi.fn(() => Promise.resolve({ id: 'new-6' }));
+    const sendMock = vi.fn(() => Promise.resolve({ id: "new-6" }));
 
     // No fetch function on members
     const members = new Map<string, any>([
-      ['u1', { id: 'u1', user: { bot: false } }],
-      ['u2', { id: 'u2', user: { bot: false } }],
+      ["u1", { id: "u1", user: { bot: false } }],
+      ["u2", { id: "u2", user: { bot: false } }],
     ]);
     const guild = { members: { cache: members } } as any;
-    const channel = { guild, send: sendMock, messages: { delete: vi.fn() } } as any;
-    const client = { channels: { fetch: vi.fn(() => Promise.resolve(channel)) } } as any;
+    const channel = {
+      guild,
+      send: sendMock,
+      messages: { delete: vi.fn() },
+    } as any;
+    const client = {
+      channels: { fetch: vi.fn(() => Promise.resolve(channel)) },
+    } as any;
 
     await sendReminders(client, Polls);
 
     expect(sendMock).toHaveBeenCalledTimes(1);
-    const firstCall = ((sendMock.mock.calls as unknown) as any[])[0] as any[];
+    const firstCall = (sendMock.mock.calls as unknown as any[])[0] as any[];
     const firstArg = firstCall[0] as any;
     const { content } = firstArg;
-    expect(content).toContain('<@u2>');
-    expect(setReminderMessageId).toHaveBeenCalledWith('p6', 'new-6');
+    expect(content).toContain("<@u2>");
+    expect(setReminderMessageId).toHaveBeenCalledWith("p6", "new-6");
   });
 
-  it('swallows delete errors and continues to send a new reminder', async () => {
+  it("swallows delete errors and continues to send a new reminder", async () => {
     const poll = {
-      id: 'p7',
-      channelId: 'c7',
-      messageId: 'poll-msg',
-      selections: makeSelections(['u1']),
-      reminderMessageId: 'old-7',
+      id: "p7",
+      channelId: "c7",
+      messageId: "poll-msg",
+      selections: makeSelections(["u1"]),
+      reminderMessageId: "old-7",
     };
     const setReminderMessageId = vi.fn();
     const Polls = { allOpen: vi.fn(() => [poll]), setReminderMessageId } as any;
 
-    const sendMock = vi.fn(() => Promise.resolve({ id: 'new-7' }));
-    const deleteMock = vi.fn(() => Promise.reject(new Error('cannot delete')));
+    const sendMock = vi.fn(() => Promise.resolve({ id: "new-7" }));
+    const deleteMock = vi.fn(() => Promise.reject(new Error("cannot delete")));
 
     const members = new Map<string, any>([
-      ['u1', { id: 'u1', user: { bot: false } }],
-      ['u9', { id: 'u9', user: { bot: false } }],
+      ["u1", { id: "u1", user: { bot: false } }],
+      ["u9", { id: "u9", user: { bot: false } }],
     ]);
     const guild = { members: { cache: members, fetch: vi.fn() } } as any;
-    const channel = { guild, send: sendMock, messages: { delete: deleteMock } } as any;
-    const client = { channels: { fetch: vi.fn(() => Promise.resolve(channel)) } } as any;
+    const channel = {
+      guild,
+      send: sendMock,
+      messages: { delete: deleteMock },
+    } as any;
+    const client = {
+      channels: { fetch: vi.fn(() => Promise.resolve(channel)) },
+    } as any;
 
     await sendReminders(client, Polls);
 
     // delete was attempted then ignored on error
-    expect(deleteMock).toHaveBeenCalledWith('old-7');
+    expect(deleteMock).toHaveBeenCalledWith("old-7");
     // should still send a new reminder
     expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(setReminderMessageId).toHaveBeenCalledWith('p7', undefined);
-    expect(setReminderMessageId).toHaveBeenCalledWith('p7', 'new-7');
+    expect(setReminderMessageId).toHaveBeenCalledWith("p7", undefined);
+    expect(setReminderMessageId).toHaveBeenCalledWith("p7", "new-7");
   });
 
-  it('respects start_time schedule and interval, sending only on due ticks', async () => {
+  it("respects start_time schedule and interval, sending only on due ticks", async () => {
     // Turn on debug logs for this test
     const prev = process.env.WHEN_DEBUG_REMINDERS;
-    process.env.WHEN_DEBUG_REMINDERS = '1';
+    process.env.WHEN_DEBUG_REMINDERS = "1";
 
     // Freeze time control
     vi.useFakeTimers();
     const base = new Date(Date.UTC(2025, 0, 1, 9, 0, 0, 0)); // 2025-01-01 09:00Z
     vi.setSystemTime(base);
 
-    const guildId = 'g-time';
-    const chanId = 'c-time';
+    const guildId = "g-time";
+    const chanId = "c-time";
 
     // Clean config for this channel
-    for (const key of ['reminders.enabled','reminders.intervalHours','reminders.lastSent','reminders.startTime']) {
+    for (const key of [
+      "reminders.enabled",
+      "reminders.intervalHours",
+      "reminders.lastSent",
+      "reminders.startTime",
+    ]) {
       ChannelConfig.delete(guildId, chanId, key);
     }
     // Set enabled and schedule
     ReminderSettings.setEnabled(guildId, chanId, true);
-    ReminderSettings.setStartTime(guildId, chanId, '10:00');
+    ReminderSettings.setStartTime(guildId, chanId, "10:00");
     ReminderSettings.setIntervalHours(guildId, chanId, 12);
 
     const poll = {
-      id: 'pt',
+      id: "pt",
       channelId: chanId,
-      messageId: 'poll-msg',
-      selections: makeSelections(['u1']),
+      messageId: "poll-msg",
+      selections: makeSelections(["u1"]),
       reminderMessageId: undefined,
     };
     const setReminderMessageId = vi.fn();
     const Polls = { allOpen: vi.fn(() => [poll]), setReminderMessageId } as any;
 
-    const sendMock = vi.fn(() => Promise.resolve({ id: 'new-time-1' }));
+    const sendMock = vi.fn(() => Promise.resolve({ id: "new-time-1" }));
     const deleteMock = vi.fn(() => Promise.resolve());
 
     const members = new Map<string, any>([
-      ['u1', { id: 'u1', user: { bot: false } }], // responded
-      ['u2', { id: 'u2', user: { bot: false } }], // non-responder
+      ["u1", { id: "u1", user: { bot: false } }], // responded
+      ["u2", { id: "u2", user: { bot: false } }], // non-responder
     ]);
     const guild = { id: guildId, members: { cache: members, fetch: vi.fn() } };
-    const channel = { id: chanId, guild, send: sendMock, messages: { delete: deleteMock } } as any;
-    const client = { channels: { fetch: vi.fn(() => Promise.resolve(channel)) } } as any;
+    const channel = {
+      id: chanId,
+      guild,
+      send: sendMock,
+      messages: { delete: deleteMock },
+    } as any;
+    const client = {
+      channels: { fetch: vi.fn(() => Promise.resolve(channel)) },
+    } as any;
 
     // Not due at 09:00 (before the first slot 10:00)
     await sendReminders(client, Polls);
@@ -320,7 +386,7 @@ describe('util/reminders', () => {
     vi.setSystemTime(new Date(Date.UTC(2025, 0, 1, 10, 0, 0, 0)));
     await sendReminders(client, Polls);
     expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(setReminderMessageId).toHaveBeenCalledWith('pt', 'new-time-1');
+    expect(setReminderMessageId).toHaveBeenCalledWith("pt", "new-time-1");
 
     // Calling again at 10:00 shouldn't send twice (lastSent gate)
     await sendReminders(client, Polls);
@@ -328,7 +394,7 @@ describe('util/reminders', () => {
 
     // Advance to 22:00 UTC (12h later) -> should send again
     vi.setSystemTime(new Date(Date.UTC(2025, 0, 1, 22, 0, 0, 0)));
-    sendMock.mockResolvedValueOnce({ id: 'new-time-2' } as any);
+    sendMock.mockResolvedValueOnce({ id: "new-time-2" } as any);
     await sendReminders(client, Polls);
     expect(sendMock).toHaveBeenCalledTimes(2);
 
@@ -338,83 +404,99 @@ describe('util/reminders', () => {
     process.env.WHEN_DEBUG_REMINDERS = prev;
   });
 
-  it('splits long reminder mentions into multiple messages with no truncation', async () => {
+  it("splits long reminder mentions into multiple messages with no truncation", async () => {
     const poll = {
-      id: 'plong',
-      channelId: 'c-long',
-      messageId: 'poll-msg',
-      selections: makeSelections(['u0']),
+      id: "plong",
+      channelId: "c-long",
+      messageId: "poll-msg",
+      selections: makeSelections(["u0"]),
     };
     const setReminderMessageId = vi.fn();
     const Polls = { allOpen: vi.fn(() => [poll]), setReminderMessageId } as any;
 
     // Return unique ids so we can assert first one persisted
     let counter = 0;
-    const sendMock = vi.fn((opts: any) => Promise.resolve({ id: `new-long-${++counter}`, content: opts?.content }));
+    const sendMock = vi.fn((opts: any) =>
+      Promise.resolve({ id: `new-long-${++counter}`, content: opts?.content }),
+    );
 
     // Build many non-responders to produce a very long mentions string (>2000 chars total)
     const members = new Map<string, any>();
-    members.set('u0', { id: 'u0', user: { bot: false } }); // responded
+    members.set("u0", { id: "u0", user: { bot: false } }); // responded
     const COUNT = 400; // 400 mentions should be split
     for (let i = 1; i <= COUNT; i++) {
       members.set(`u${i}`, { id: `u${i}`, user: { bot: false } });
     }
     const guild = { members: { cache: members, fetch: vi.fn() } } as any;
-    const channel = { guild, send: sendMock, messages: { delete: vi.fn() } } as any;
-    const client = { channels: { fetch: vi.fn(() => Promise.resolve(channel)) } } as any;
+    const channel = {
+      guild,
+      send: sendMock,
+      messages: { delete: vi.fn() },
+    } as any;
+    const client = {
+      channels: { fetch: vi.fn(() => Promise.resolve(channel)) },
+    } as any;
 
     await sendReminders(client as any, Polls);
 
-    expect((sendMock.mock.calls as unknown as any[][]).length).toBeGreaterThan(1);
+    expect((sendMock.mock.calls as unknown as any[][]).length).toBeGreaterThan(
+      1,
+    );
     // All chunks must be within Discord limit and contain no truncation suffix
-    const calls = (sendMock.mock.calls as unknown as any[][]);
+    const calls = sendMock.mock.calls as unknown as any[][];
     for (const call of calls) {
       const c = call[0]?.content as string;
       expect(c.length).toBeLessThanOrEqual(2000);
-      expect(c).toContain('Reminder:');
-      expect(c).not.toContain('… (truncated)');
+      expect(c).toContain("Reminder:");
+      expect(c).not.toContain("… (truncated)");
     }
     // Last chunk should include the last mention
     const lastCall = calls[calls.length - 1]!;
-    const lastContent = (lastCall?.[0]?.content ?? '') as string;
-    expect(lastContent).toContain('<@u400>');
+    const lastContent = (lastCall?.[0]?.content ?? "") as string;
+    expect(lastContent).toContain("<@u400>");
     // First sent id persisted
-    expect(setReminderMessageId).toHaveBeenCalledWith('plong', 'new-long-1');
+    expect(setReminderMessageId).toHaveBeenCalledWith("plong", "new-long-1");
   });
 
-  it('does not set reply when original poll messageId is null', async () => {
+  it("does not set reply when original poll messageId is null", async () => {
     const poll = {
-      id: 'p1-null',
-      channelId: 'c1-null',
+      id: "p1-null",
+      channelId: "c1-null",
       messageId: null as any,
-      selections: makeSelections(['u1']),
-      reminderMessageId: 'old-null',
+      selections: makeSelections(["u1"]),
+      reminderMessageId: "old-null",
     };
     const setReminderMessageId = vi.fn();
     const Polls = { allOpen: vi.fn(() => [poll]), setReminderMessageId } as any;
 
-    const sendMock = vi.fn(() => Promise.resolve({ id: 'new-null' }));
+    const sendMock = vi.fn(() => Promise.resolve({ id: "new-null" }));
     const deleteMock = vi.fn(() => Promise.resolve());
 
     const members = new Map<string, any>([
-      ['u1', { id: 'u1', user: { bot: false } }],
-      ['u2', { id: 'u2', user: { bot: false } }],
+      ["u1", { id: "u1", user: { bot: false } }],
+      ["u2", { id: "u2", user: { bot: false } }],
     ]);
     const guild = { members: { cache: members, fetch: vi.fn() } } as any;
-    const channel = { guild, send: sendMock, messages: { delete: deleteMock } } as any;
-    const client = { channels: { fetch: vi.fn(() => Promise.resolve(channel)) } } as any;
+    const channel = {
+      guild,
+      send: sendMock,
+      messages: { delete: deleteMock },
+    } as any;
+    const client = {
+      channels: { fetch: vi.fn(() => Promise.resolve(channel)) },
+    } as any;
 
     await sendReminders(client, Polls);
 
-    expect(deleteMock).toHaveBeenCalledWith('old-null');
+    expect(deleteMock).toHaveBeenCalledWith("old-null");
     expect(sendMock).toHaveBeenCalledTimes(1);
     const call = (sendMock.mock.calls as unknown as any[][])[0]!;
     const arg = call[0] as any;
     // No reply field should be present when messageId is null
     expect(arg.reply).toBeUndefined();
     // Content should not include the "above" hint when not replying
-    expect((arg.content as string)).toContain('Reminder:');
-    expect((arg.content as string)).not.toContain('above');
-    expect(setReminderMessageId).toHaveBeenCalledWith('p1-null', 'new-null');
+    expect(arg.content as string).toContain("Reminder:");
+    expect(arg.content as string).not.toContain("above");
+    expect(setReminderMessageId).toHaveBeenCalledWith("p1-null", "new-null");
   });
 });

@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { renderGridPng, __setCanvasModule } from '../src/util/gridImage.js';
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { renderGridPng, __setCanvasModule } from "../src/util/gridImage.js";
 
-describe('gridImage require-canvas behavior (isolated)', () => {
+describe("gridImage require-canvas behavior (isolated)", () => {
   let prev: string | undefined;
   let originalCanvas: any;
 
@@ -15,10 +15,11 @@ describe('gridImage require-canvas behavior (isolated)', () => {
     __setCanvasModule(originalCanvas);
   });
 
-  it('throws when WHEN_REQUIRE_CANVAS=1 and no canvas is available', () => {
-    process.env.WHEN_REQUIRE_CANVAS = '1';
+  it("throws when WHEN_REQUIRE_CANVAS=1 and no canvas is available", () => {
+    process.env.WHEN_REQUIRE_CANVAS = "1";
     __setCanvasModule(null);
-    expect(() => renderGridPng([[true]], {} as any)).toThrow(/node-canvas is required/);
+    expect(() => renderGridPng([[true]], {} as any)).toThrow(
+      /node-canvas is required/,
+    );
   });
 });
-

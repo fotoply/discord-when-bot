@@ -12,7 +12,8 @@ function log(...args: any[]) {
 
 @ApplyOptions<Command.Options>({
   name: "remind",
-  description: "Admin: trigger reminders or configure per-channel reminder settings",
+  description:
+    "Admin: trigger reminders or configure per-channel reminder settings",
 })
 export default class RemindCommand extends Command {
   public override registerApplicationCommands(registry: Command.Registry) {
@@ -22,35 +23,45 @@ export default class RemindCommand extends Command {
           .setName(this.name)
           .setDescription(this.description ?? "Reminders")
           .addSubcommand((s: any) =>
-            s.setName("now").setDescription("Trigger a reminder in this channel for active polls")
+            s
+              .setName("now")
+              .setDescription(
+                "Trigger a reminder in this channel for active polls",
+              ),
           )
           .addSubcommand((s: any) =>
             s
               .setName("config")
-              .setDescription("Show or update reminder settings for this channel")
+              .setDescription(
+                "Show or update reminder settings for this channel",
+              )
               .addStringOption((o: any) =>
                 o
                   .setName("enabled")
-                  .setDescription("Enable or disable reminders (true/false or show)")
+                  .setDescription(
+                    "Enable or disable reminders (true/false or show)",
+                  )
                   .setRequired(false)
                   .addChoices(
                     { name: "show", value: "show" },
                     { name: "true", value: "true" },
                     { name: "false", value: "false" },
-                  )
+                  ),
               )
               .addIntegerOption((o: any) =>
                 o
                   .setName("interval_hours")
                   .setDescription("Minimum hours between reminders (>=1)")
-                  .setRequired(false)
+                  .setRequired(false),
               )
               .addStringOption((o: any) =>
                 o
                   .setName("start_time")
-                  .setDescription("Starting time in HH:mm (UTC). Use minutes :00. Use 'clear' to unset.")
-                  .setRequired(false)
-              )
+                  .setDescription(
+                    "Starting time in HH:mm (UTC). Use minutes :00. Use 'clear' to unset.",
+                  )
+                  .setRequired(false),
+              ),
           ),
       process.env.GUILD_ID ? { guildIds: [process.env.GUILD_ID] } : undefined,
     );
@@ -58,19 +69,30 @@ export default class RemindCommand extends Command {
 
   private isAdmin(interaction: ChatInputCommandInteraction): boolean {
     const member: any = interaction.member;
-    return !!(member && member.permissions && typeof member.permissions.has === "function" && member.permissions.has("Administrator"));
+    return !!(
+      member &&
+      member.permissions &&
+      typeof member.permissions.has === "function" &&
+      member.permissions.has("Administrator")
+    );
   }
 
   public override async chatInputRun(interaction: ChatInputCommandInteraction) {
     const sub = interaction.options.getSubcommand();
 
     if (!this.isAdmin(interaction)) {
-      await interaction.reply({ content: "Only an administrator can use this command.", ephemeral: true });
+      await interaction.reply({
+        content: "Only an administrator can use this command.",
+        ephemeral: true,
+      });
       return;
     }
 
     if (!interaction.guild || !interaction.channel) {
-      await interaction.reply({ content: "This command must be used in a guild text channel.", ephemeral: true });
+      await interaction.reply({
+        content: "This command must be used in a guild text channel.",
+        ephemeral: true,
+      });
       return;
     }
 
@@ -90,25 +112,37 @@ export default class RemindCommand extends Command {
       log(`now: guild=${guildId} channel=${channelId} force=true`);
       // Fire-and-forget; force bypasses interval throttle for explicit admin-triggered reminders
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      sendReminders((this.container.client as any), Polls, { channelId, force: true }).catch(() => {});
+      sendReminders(this.container.client as any, Polls, {
+        channelId,
+        force: true,
+      }).catch(() => {});
 
       if (deferred) {
-        await interaction.editReply({ content: "Triggered reminders for this channel (if needed)." });
+        await interaction.editReply({
+          content: "Triggered reminders for this channel (if needed).",
+        });
       } else {
-        await interaction.reply({ content: "Triggered reminders for this channel (if needed).", ephemeral: true });
+        await interaction.reply({
+          content: "Triggered reminders for this channel (if needed).",
+          ephemeral: true,
+        });
       }
       return;
     }
 
     if (sub === "config") {
       const enabledChoice = interaction.options.getString("enabled");
-      const intervalHours = interaction.options.getInteger("interval_hours") ?? undefined;
-      const startTime = interaction.options.getString("start_time") ?? undefined;
+      const intervalHours =
+        interaction.options.getInteger("interval_hours") ?? undefined;
+      const startTime =
+        interaction.options.getString("start_time") ?? undefined;
 
       // If show or no options, just display current
       if (!enabledChoice && intervalHours === undefined && !startTime) {
         const current = ReminderSettings.get(guildId, channelId);
-        log(`config show: guild=${guildId} channel=${channelId} enabled=${current.enabled} interval=${current.intervalHours}h start=${current.startTime ?? 'unset'}`);
+        log(
+          `config show: guild=${guildId} channel=${channelId} enabled=${current.enabled} interval=${current.intervalHours}h start=${current.startTime ?? "unset"}`,
+        );
         await interaction.reply({
           content: `Current reminder settings for this channel:\n- enabled: ${current.enabled}\n- intervalHours: ${current.intervalHours}${current.startTime ? `\n- startTime: ${current.startTime} (UTC)` : ""}${current.lastSent ? `\n- lastSent: ${new Date(current.lastSent).toISOString()}` : ""}`,
           ephemeral: true,
@@ -118,7 +152,9 @@ export default class RemindCommand extends Command {
 
       if (enabledChoice === "show" || startTime === "show") {
         const current = ReminderSettings.get(guildId, channelId);
-        log(`config show: guild=${guildId} channel=${channelId} enabled=${current.enabled} interval=${current.intervalHours}h start=${current.startTime ?? 'unset'}`);
+        log(
+          `config show: guild=${guildId} channel=${channelId} enabled=${current.enabled} interval=${current.intervalHours}h start=${current.startTime ?? "unset"}`,
+        );
         await interaction.reply({
           content: `Current reminder settings for this channel:\n- enabled: ${current.enabled}\n- intervalHours: ${current.intervalHours}${current.startTime ? `\n- startTime: ${current.startTime} (UTC)` : ""}${current.lastSent ? `\n- lastSent: ${new Date(current.lastSent).toISOString()}` : ""}`,
           ephemeral: true,
@@ -143,12 +179,19 @@ export default class RemindCommand extends Command {
         } else {
           const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(startTime);
           if (!m) {
-            await interaction.reply({ content: "start_time must be in HH:mm (00-23:00-59) format.", ephemeral: true });
+            await interaction.reply({
+              content: "start_time must be in HH:mm (00-23:00-59) format.",
+              ephemeral: true,
+            });
             return;
           }
           const minutes = Number(m[2]);
           if (minutes !== 0) {
-            await interaction.reply({ content: "start_time minutes must be :00 to align with the hourly scheduler.", ephemeral: true });
+            await interaction.reply({
+              content:
+                "start_time minutes must be :00 to align with the hourly scheduler.",
+              ephemeral: true,
+            });
             return;
           }
           ReminderSettings.setStartTime(guildId, channelId, startTime);
@@ -156,7 +199,9 @@ export default class RemindCommand extends Command {
       }
 
       const updated = ReminderSettings.get(guildId, channelId);
-      log(`config update: guild=${guildId} channel=${channelId} enabled=${updated.enabled} interval=${updated.intervalHours}h start=${updated.startTime ?? 'unset'}`);
+      log(
+        `config update: guild=${guildId} channel=${channelId} enabled=${updated.enabled} interval=${updated.intervalHours}h start=${updated.startTime ?? "unset"}`,
+      );
       await interaction.reply({
         content: `Updated reminder settings:\n- enabled: ${updated.enabled}\n- intervalHours: ${updated.intervalHours}${updated.startTime ? `\n- startTime: ${updated.startTime} (UTC)` : ""}`,
         ephemeral: true,
@@ -164,6 +209,9 @@ export default class RemindCommand extends Command {
       return;
     }
 
-    await interaction.reply({ content: "Unknown subcommand.", ephemeral: true });
+    await interaction.reply({
+      content: "Unknown subcommand.",
+      ephemeral: true,
+    });
   }
 }
