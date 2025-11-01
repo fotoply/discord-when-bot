@@ -60,7 +60,7 @@ db.exec(`
     );
 `);
 
-// Lightweight migration: ensure polls.view_mode, reminder_message_id, and roles exist
+// Lightweight migration: ensure polls.view_mode, reminder_message_id, roles, and ready_notified_at exist
 try {
   const cols = db.prepare("PRAGMA table_info(polls)").all() as Array<{
     name: string;
@@ -78,6 +78,10 @@ try {
   const hasRoles = cols.some((c) => c.name === "roles");
   if (!hasRoles) {
     db.exec("ALTER TABLE polls ADD COLUMN roles TEXT");
+  }
+  const hasReadySent = cols.some((c) => c.name === "ready_notified_at");
+  if (!hasReadySent) {
+    db.exec("ALTER TABLE polls ADD COLUMN ready_notified_at INTEGER");
   }
 } catch (e) {
   // Best effort; tests will reveal if anything goes wrong

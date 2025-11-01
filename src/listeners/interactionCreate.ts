@@ -16,8 +16,12 @@ import {
 } from "../util/date.js";
 import { buildPollMessage } from "../util/pollRender.js";
 import { DefaultRole } from "../store/config.js";
-import { CUSTOM_ID, PERMISSION_ADMINISTRATOR, parseCustomId } from "../util/constants.js";
-import { onPollActivity, cancelFor } from "../util/readyNotify.js";
+import {
+  CUSTOM_ID,
+  parseCustomId,
+  PERMISSION_ADMINISTRATOR,
+} from "../util/constants.js";
+import { cancelFor, onPollActivity } from "../util/readyNotify.js";
 
 function log(...args: any[]) {
   // eslint-disable-next-line no-console
@@ -605,12 +609,8 @@ export default class InteractionCreateListener extends Listener<
     // Only the poll creator or a guild admin may close the poll
     if (interaction.user.id !== poll.creatorId) {
       const member = (interaction as any).member;
-      const isAdmin = !!(
-        member &&
-        member.permissions &&
-        typeof member.permissions.has === "function" &&
-        member.permissions.has(PERMISSION_ADMINISTRATOR)
-      );
+      const isAdmin =
+        member?.permissions?.has?.(PERMISSION_ADMINISTRATOR) === true;
       if (!isAdmin) {
         await interaction.reply({
           content: "Only the poll creator can close this poll.",

@@ -47,7 +47,7 @@ describe("/remind ready config", () => {
     await RemindCommand.prototype.chatInputRun.call({}, interaction as any);
     const call = (interaction.reply as any).mock.calls[0][0];
     expect(call.content).toContain("enabled");
-    expect(call.content).toContain("delayMs");
+    expect(call.content).toContain("delay: 5 minute(s)");
   });
 
   it("parses human-friendly delay strings and defaults to minutes when unit missing", async () => {
@@ -111,4 +111,3 @@ describe("/remind ready config", () => {
     expect(arg.content).toMatch(/Invalid delay/);
   });
 });
-

@@ -15,4 +15,3 @@ export function queryAll<T>(sql: string, ...params: any[]): T[] {
 export function exec(sql: string, ...params: any[]): void {
   db.prepare(sql).run(...params);
 }
-

@@ -48,7 +48,13 @@ export function parseCustomId(id: string | undefined | null): ParsedCustomId {
       const pollId = parts[2];
       const date = parts.slice(3).join(":"); // allow dates with ":" theoretically, but ours don't
       // Return even if date is missing so callers can validate payload order-wise
-      return pollId ? ({ kind: "toggle", pollId, ...(date ? { date } : {}) } as ParsedCustomId) : { kind: "unknown" };
+      return pollId
+        ? ({
+            kind: "toggle",
+            pollId,
+            ...(date ? { date } : {}),
+          } as ParsedCustomId)
+        : { kind: "unknown" };
     }
     case CUSTOM_ID_ACTIONS.TOGGLE_ALL: {
       const pollId = parts[2];

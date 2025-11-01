@@ -30,17 +30,15 @@ describe("Ready listener boot-time checks", () => {
     // Fake client where channels.fetch returns a channel-like object whose messages.fetch throws Unknown Message
     const client = {
       channels: {
-        fetch: vi
-          .fn()
-          .mockResolvedValue({
-            messages: {
-              fetch: vi
-                .fn()
-                .mockRejectedValue(
-                  Object.assign(new Error("Unknown Message"), { code: 10008 }),
-                ),
-            },
-          }),
+        fetch: vi.fn().mockResolvedValue({
+          messages: {
+            fetch: vi
+              .fn()
+              .mockRejectedValue(
+                Object.assign(new Error("Unknown Message"), { code: 10008 }),
+              ),
+          },
+        }),
       },
     } as any;
 
@@ -79,11 +77,9 @@ describe("Ready listener boot-time checks", () => {
   it("closes a poll when messages.fetch rejects with Unknown Channel (status 10003)", async () => {
     const client = {
       channels: {
-        fetch: vi
-          .fn()
-          .mockResolvedValue({
-            messages: { fetch: vi.fn().mockRejectedValue({ status: 10003 }) },
-          }),
+        fetch: vi.fn().mockResolvedValue({
+          messages: { fetch: vi.fn().mockRejectedValue({ status: 10003 }) },
+        }),
       },
     } as any;
 
@@ -100,13 +96,11 @@ describe("Ready listener boot-time checks", () => {
   it("closes a poll when messages.fetch rejects with Error containing Unknown Channel", async () => {
     const client = {
       channels: {
-        fetch: vi
-          .fn()
-          .mockResolvedValue({
-            messages: {
-              fetch: vi.fn().mockRejectedValue(new Error("Unknown Channel")),
-            },
-          }),
+        fetch: vi.fn().mockResolvedValue({
+          messages: {
+            fetch: vi.fn().mockRejectedValue(new Error("Unknown Channel")),
+          },
+        }),
       },
     } as any;
 

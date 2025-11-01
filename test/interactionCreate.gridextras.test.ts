@@ -138,12 +138,10 @@ describe("InteractionCreate.buildGridExtras", () => {
       },
     };
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue({
-        ok: false,
-        arrayBuffer: async () => new ArrayBuffer(0),
-      });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      arrayBuffer: async () => new ArrayBuffer(0),
+    });
     (globalThis as any).fetch = fetchMock;
 
     const extras = await (listener as any).buildGridExtras(poll, interaction);

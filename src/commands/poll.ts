@@ -187,12 +187,8 @@ export default class PollCommand extends Command {
     if (sub === "defaultrole") {
       // Inline admin check to keep tests working even when calling with a plain object for `this`
       const member: any = interaction.member as any;
-      const isAdmin = !!(
-        member &&
-        member.permissions &&
-        typeof member.permissions.has === "function" &&
-        member.permissions.has(PERMISSION_ADMINISTRATOR)
-      );
+      const isAdmin =
+        member?.permissions?.has?.(PERMISSION_ADMINISTRATOR) === true;
       if (!isAdmin) {
         await interaction.reply({
           content: "Only an administrator can use this command.",
@@ -304,12 +300,8 @@ export default class PollCommand extends Command {
         return;
       }
       const member = interaction.member;
-      const isAdmin = !!(
-        member &&
-        member.permissions &&
-        typeof member.permissions.has === "function" &&
-        member.permissions.has(PERMISSION_ADMINISTRATOR)
-      );
+      const isAdmin =
+        member?.permissions?.has?.(PERMISSION_ADMINISTRATOR) === true;
       if (!isAdmin) {
         await interaction.reply({
           content: "Only an admin can reopen polls.",

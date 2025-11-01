@@ -102,10 +102,7 @@ function splitReminderMessages(
 }
 
 // Compute non-responders for a poll within a guild (excludes bots and respects poll.roles if specified)
-export function computeNonResponders(
-  poll: any,
-  guild: any,
-): string[] {
+export function computeNonResponders(poll: any, guild: any): string[] {
   // Build responded set from all selections (including NONE_SELECTION)
   const responded = new Set<string>();
   for (const set of poll.selections.values()) {
@@ -150,9 +147,8 @@ export function computeNonResponders(
         typeof m.roles === "object" &&
         typeof m.roles.cache === "object"
       ) {
-        for (const [rid] of (
-          m.roles.cache as Map<string, any>
-        ).entries?.() ?? []) {
+        for (const [rid] of (m.roles.cache as Map<string, any>).entries?.() ??
+          []) {
           if (roleSet.has(String(rid))) {
             hasRole = true;
             break;

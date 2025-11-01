@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { onPollActivity, setQuietDelayMs, getPendingDueAt, cancelFor } from "../src/util/readyNotify.js";
+import {
+  onPollActivity,
+  setQuietDelayMs,
+  getPendingDueAt,
+  cancelFor,
+} from "../src/util/readyNotify.js";
 
 function makePoll(overrides?: Partial<any>) {
   const base = {
@@ -25,7 +30,11 @@ function makeGuild(memberIds: string[]) {
 
 function makeClient(sendSpy: any, channelId = "chan-1") {
   const channel = { id: channelId, send: sendSpy, guild: makeGuild([]) } as any;
-  return { channels: { fetch: vi.fn(async (id: string) => (id === channelId ? channel : null)) } } as any;
+  return {
+    channels: {
+      fetch: vi.fn(async (id: string) => (id === channelId ? channel : null)),
+    },
+  } as any;
 }
 
 describe("util/readyNotify", () => {
@@ -78,7 +87,7 @@ describe("util/readyNotify", () => {
     expect(getPendingDueAt(poll.id)).toBeTypeOf("number");
 
     // Now remove u1 response -> non-responder exists
-    ;(poll.selections.get("2025-09-01") as Set<string>).delete("u1");
+    (poll.selections.get("2025-09-01") as Set<string>).delete("u1");
     await onPollActivity(client as any, poll as any, guild);
     expect(getPendingDueAt(poll.id)).toBeUndefined();
 

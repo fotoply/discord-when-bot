@@ -16,6 +16,8 @@ export type Poll = {
   // ID of the last reminder message posted in the channel, if any
   reminderMessageId?: string;
   roles?: string[]; // role ids to notify / restrict reminders
+  // Timestamp (epoch ms) when ready notification was sent; prevents duplicates
+  readyNotifiedAt?: number;
 };
 
 // Row shapes for DB hydration
@@ -28,6 +30,7 @@ type PollRow = {
   viewMode?: "list" | "grid";
   reminderMessageId?: string;
   roles?: string | null;
+  ready_notified_at?: number | null;
 };
 
 class PollStore {
@@ -108,6 +111,28 @@ class PollStore {
       poll.reminderMessageId = messageId;
       db.prepare("UPDATE polls SET reminder_message_id = ? WHERE id = ?").run(
         messageId ?? null,
+        pollId,
+      );
+    }
+  }
+
+  setReadyNotifiedNow(pollId: string) {
+    const poll = this.polls.get(pollId) ?? this.hydrate(pollId);
+    if (poll) {
+      const now = Date.now();
+      poll.readyNotifiedAt = now;
+      db.prepare("UPDATE polls SET ready_notified_at = ? WHERE id = ?").run(
+        now,
+        pollId,
+      );
+    }
+  }
+
+  clearReadyNotified(pollId: string) {
+    const poll = this.polls.get(pollId) ?? this.hydrate(pollId);
+    if (poll) {
+      poll.readyNotifiedAt = undefined;
+      db.prepare("UPDATE polls SET ready_notified_at = NULL WHERE id = ?").run(
         pollId,
       );
     }
@@ -284,7 +309,7 @@ class PollStore {
   private hydrate(pollId: string): Poll | undefined {
     // Load a poll from DB
     const row = queryOne<PollRow>(
-      "SELECT id, channel_id AS channelId, creator_id AS creatorId, message_id AS messageId, closed, COALESCE(view_mode, 'list') AS viewMode, reminder_message_id AS reminderMessageId, roles FROM polls WHERE id = ?",
+      "SELECT id, channel_id AS channelId, creator_id AS creatorId, message_id AS messageId, closed, COALESCE(view_mode, 'list') AS viewMode, reminder_message_id AS reminderMessageId, roles, ready_notified_at FROM polls WHERE id = ?",
       pollId,
     );
     if (!row) return undefined;
@@ -325,6 +350,7 @@ class PollStore {
       viewMode: row.viewMode ?? "list",
       reminderMessageId: row.reminderMessageId ?? undefined,
       roles,
+      readyNotifiedAt: row.ready_notified_at ?? undefined,
     };
     this.polls.set(pollId, poll);
     return poll;
@@ -332,5 +358,3 @@ class PollStore {
 }
 
 export const Polls = new PollStore();
-
-
