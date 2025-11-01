@@ -14,3 +14,4 @@ test-data/
 .stryker-tmp/
 reports/
 .github/copilot-instructions.md
+.serena/*
