@@ -101,6 +101,79 @@ function splitReminderMessages(
   return out.length ? out : [prefix.trimEnd()];
 }
 
+// Compute non-responders for a poll within a guild (excludes bots and respects poll.roles if specified)
+export function computeNonResponders(
+  poll: any,
+  guild: any,
+): string[] {
+  // Build responded set from all selections (including NONE_SELECTION)
+  const responded = new Set<string>();
+  for (const set of poll.selections.values()) {
+    for (const userId of set) responded.add(userId);
+  }
+
+  // If roles were specified for this poll, restrict candidates to members who have at least one of those roles
+  const roleSet: Set<string> | undefined =
+    Array.isArray(poll.roles) && poll.roles.length
+      ? new Set<string>(poll.roles)
+      : undefined;
+
+  // Determine non-responders: all non-bot guild members not in responded (and in roles if set)
+  const toPing: string[] = [];
+  const cache = guild?.members?.cache as Map<string, GuildMember> | any;
+  const iter =
+    cache && typeof cache.values === "function"
+      ? cache.values()
+      : cache
+        ? Object.values(cache)
+        : ([] as any[]);
+
+  for (const member of iter as Iterable<GuildMember>) {
+    const m: any = member as any;
+    if (m?.user?.bot) continue;
+    if (roleSet) {
+      const rolesForMember = m?.roles?.cache
+        ? Array.from(m.roles.cache.keys?.() ?? m.roles.cache.keys?.())
+        : Array.isArray(m?.roles)
+          ? m.roles
+          : undefined;
+      let hasRole = false;
+      if (Array.isArray(rolesForMember)) {
+        for (const r of rolesForMember) {
+          if (roleSet.has(String(r))) {
+            hasRole = true;
+            break;
+          }
+        }
+      } else if (
+        m?.roles &&
+        typeof m.roles === "object" &&
+        typeof m.roles.cache === "object"
+      ) {
+        for (const [rid] of (
+          m.roles.cache as Map<string, any>
+        ).entries?.() ?? []) {
+          if (roleSet.has(String(rid))) {
+            hasRole = true;
+            break;
+          }
+        }
+      } else if (
+        m?.roles?.cache &&
+        typeof m.roles.cache.forEach === "function"
+      ) {
+        m.roles.cache.forEach((_v: any, k: string) => {
+          if (roleSet.has(String(k))) hasRole = true;
+        });
+      }
+      if (!hasRole) continue;
+    }
+    if (responded.has(m.id)) continue;
+    toPing.push(m.id);
+  }
+  return toPing;
+}
+
 export async function sendReminders(
   client: Client,
   Polls: any,
@@ -191,69 +264,8 @@ export async function sendReminders(
       } catch (e) {
         log(`members.fetch failed:`, (e as any)?.message ?? e);
       }
-      const cache = guild.members.cache as Map<string, GuildMember> | any;
 
-      // Build responded set from all selections (including NONE_SELECTION)
-      const responded = new Set<string>();
-      for (const set of poll.selections.values()) {
-        for (const userId of set) responded.add(userId);
-      }
-
-      // If roles were specified for this poll, restrict candidates to members who have at least one of those roles
-      const roleSet: Set<string> | undefined =
-        Array.isArray(poll.roles) && poll.roles.length
-          ? new Set<string>(poll.roles)
-          : undefined;
-
-      // Determine non-responders: all non-bot guild members not in responded (and in roles if set)
-      const toPing: string[] = [];
-      const iter =
-        typeof cache.values === "function"
-          ? cache.values()
-          : Object.values(cache);
-      for (const member of iter as Iterable<GuildMember>) {
-        const m: any = member as any;
-        if (m?.user?.bot) continue;
-        if (roleSet) {
-          const rolesForMember = m?.roles?.cache
-            ? Array.from(m.roles.cache.keys?.() ?? m.roles.cache.keys?.())
-            : Array.isArray(m?.roles)
-              ? m.roles
-              : undefined;
-          let hasRole = false;
-          if (Array.isArray(rolesForMember)) {
-            for (const r of rolesForMember) {
-              if (roleSet.has(String(r))) {
-                hasRole = true;
-                break;
-              }
-            }
-          } else if (
-            m?.roles &&
-            typeof m.roles === "object" &&
-            typeof m.roles.cache === "object"
-          ) {
-            for (const [rid] of (
-              m.roles.cache as Map<string, any>
-            ).entries?.() ?? []) {
-              if (roleSet.has(String(rid))) {
-                hasRole = true;
-                break;
-              }
-            }
-          } else if (
-            m?.roles?.cache &&
-            typeof m.roles.cache.forEach === "function"
-          ) {
-            m.roles.cache.forEach((_v: any, k: string) => {
-              if (roleSet.has(String(k))) hasRole = true;
-            });
-          }
-          if (!hasRole) continue;
-        }
-        if (responded.has(m.id)) continue;
-        toPing.push(m.id);
-      }
+      const toPing = computeNonResponders(poll, guild);
       log(`poll ${poll.id}: toPing=${toPing.length}`);
 
       // If there's an old reminder, try to delete it regardless

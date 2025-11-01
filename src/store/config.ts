@@ -126,3 +126,26 @@ export const DefaultRole = {
     ChannelConfig.delete(guildId, channelId, "polls.defaultRoleId");
   },
 };
+
+// New per-channel settings for 'ready' notifications
+export type ReadyNotifyConfig = {
+  enabled: boolean; // default true
+  delayMs: number; // default 5 minutes
+};
+
+export const ReadyNotifySettings = {
+  get(guildId: string, channelId: string): ReadyNotifyConfig {
+    const enabledStr = ChannelConfig.get(guildId, channelId, "ready.enabled");
+    const delayStr = ChannelConfig.get(guildId, channelId, "ready.delayMs");
+    const enabled = enabledStr === undefined ? true : enabledStr === "true";
+    const delayMs = delayStr ? Math.max(0, parseInt(delayStr, 10) || 0) : 5 * 60 * 1000;
+    return { enabled, delayMs };
+  },
+  setEnabled(guildId: string, channelId: string, enabled: boolean) {
+    ChannelConfig.set(guildId, channelId, "ready.enabled", enabled ? "true" : "false");
+  },
+  setDelayMs(guildId: string, channelId: string, delayMs: number) {
+    const v = Math.max(0, Math.floor(delayMs));
+    ChannelConfig.set(guildId, channelId, "ready.delayMs", String(v));
+  },
+};

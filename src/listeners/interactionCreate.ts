@@ -17,6 +17,7 @@ import {
 import { buildPollMessage } from "../util/pollRender.js";
 import { DefaultRole } from "../store/config.js";
 import { CUSTOM_ID, PERMISSION_ADMINISTRATOR, parseCustomId } from "../util/constants.js";
+import { onPollActivity, cancelFor } from "../util/readyNotify.js";
 
 function log(...args: any[]) {
   // eslint-disable-next-line no-console
@@ -510,6 +511,11 @@ export default class InteractionCreateListener extends Listener<
       "date",
       date,
     );
+
+    // Schedule/cancel ready notification based on current responders
+    const client: any = (interaction as any).client;
+    const guild: any = (interaction as any).guild;
+    if (client && guild) await onPollActivity(client, updated as any, guild);
   }
 
   private async handleToggleAll(interaction: ButtonInteraction) {
@@ -545,6 +551,11 @@ export default class InteractionCreateListener extends Listener<
     const extras = await this.buildGridExtras(updated, interaction);
     await interaction.update(buildPollMessage(updated, extras) as any);
     log("toggleAll: updated poll", poll.id, "user", interaction.user.id);
+
+    // Schedule/cancel ready notification based on current responders
+    const client: any = (interaction as any).client;
+    const guild: any = (interaction as any).guild;
+    if (client && guild) await onPollActivity(client, updated as any, guild);
   }
 
   private async handleViewToggle(interaction: ButtonInteraction) {
@@ -624,5 +635,8 @@ export default class InteractionCreateListener extends Listener<
     const extras = await this.buildGridExtras(updated, interaction);
     await interaction.update(buildPollMessage(updated, extras) as any);
     log("close: closed poll", poll.id);
+
+    // Cancel any pending ready notification for this poll
+    cancelFor(poll.id);
   }
 }

@@ -3,7 +3,7 @@ import { Command } from "@sapphire/framework";
 import type { ChatInputCommandInteraction } from "discord.js";
 import { Polls } from "../store/polls.js";
 import { sendReminders } from "../util/reminders.js";
-import { ReminderSettings } from "../store/config.js";
+import { ReminderSettings, ReadyNotifySettings } from "../store/config.js";
 import { PERMISSION_ADMINISTRATOR } from "../util/constants.js";
 
 function log(...args: any[]) {
@@ -61,6 +61,30 @@ export default class RemindCommand extends Command {
                   .setDescription(
                     "Starting time in HH:mm (UTC). Use minutes :00. Use 'clear' to unset.",
                   )
+                  .setRequired(false),
+              ),
+          )
+          .addSubcommand((s: any) =>
+            s
+              .setName("ready")
+              .setDescription(
+                "Show or update 'ready' notification settings for this channel",
+              )
+              .addStringOption((o: any) =>
+                o
+                  .setName("enabled")
+                  .setDescription("Enable/disable ready notifications or show")
+                  .setRequired(false)
+                  .addChoices(
+                    { name: "show", value: "show" },
+                    { name: "true", value: "true" },
+                    { name: "false", value: "false" },
+                  ),
+              )
+              .addStringOption((o: any) =>
+                o
+                  .setName("delay")
+                  .setDescription("Quiet period (e.g., 5m, 30s, 1h). Numbers imply minutes.")
                   .setRequired(false),
               ),
           ),
@@ -210,9 +234,101 @@ export default class RemindCommand extends Command {
       return;
     }
 
-    await interaction.reply({
-      content: "Unknown subcommand.",
-      ephemeral: true,
-    });
+    if (sub === "ready") {
+      const enabledChoice = interaction.options.getString("enabled");
+      const delayStr = interaction.options.getString("delay") ?? undefined;
+
+      if (!enabledChoice && delayStr === undefined) {
+        const current = ReadyNotifySettings.get(guildId, channelId);
+        await interaction.reply({
+          content: `Current ready settings for this channel:\n- enabled: ${current.enabled}\n- delayMs: ${current.delayMs}`,
+          ephemeral: true,
+        });
+        return;
+      }
+
+      if (enabledChoice === "show") {
+        const current = ReadyNotifySettings.get(guildId, channelId);
+        await interaction.reply({
+          content: `Current ready settings for this channel:\n- enabled: ${current.enabled}\n- delayMs: ${current.delayMs}`,
+          ephemeral: true,
+        });
+        return;
+      }
+
+      if (enabledChoice === "true") ReadyNotifySettings.setEnabled(guildId, channelId, true);
+      if (enabledChoice === "false") ReadyNotifySettings.setEnabled(guildId, channelId, false);
+
+      if (delayStr !== undefined) {
+        const ms = parseDelayToMs(delayStr);
+        if (ms === undefined) {
+          await interaction.reply({
+            content: "Invalid delay. Use values like '5m', '30s', '1h'. Numbers imply minutes.",
+            ephemeral: true,
+          });
+          return;
+        }
+        ReadyNotifySettings.setDelayMs(guildId, channelId, ms);
+      }
+
+      const updated = ReadyNotifySettings.get(guildId, channelId);
+      await interaction.reply({
+        content: `Updated ready settings:\n- enabled: ${updated.enabled}\n- delayMs: ${updated.delayMs}`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    await interaction.reply({ content: "Unknown subcommand.", ephemeral: true });
   }
+}
+
+// Local helper: parse a human-friendly duration string into milliseconds.
+function parseDelayToMs(input: string): number | undefined {
+    const s = String(input).trim().toLowerCase();
+    if (!s) return undefined;
+
+    // Allow plain numbers to mean minutes by default
+    const plain = /^\d+(?:\.\d+)?$/.exec(s);
+    if (plain) {
+        const v = parseFloat(s);
+        if (Number.isNaN(v)) return undefined;
+        return Math.max(0, Math.round(v * 60_000));
+    }
+
+    const m = /^(\d+(?:\.\d+)?)(\s*[a-z]+)$/.exec(s);
+    if (!m) return undefined;
+    if (m.length < 3) return undefined;
+    if (!m[1]) return undefined;
+    if (!m[2]) return undefined;
+    const value = parseFloat(m[1]);
+    if (Number.isNaN(value)) return undefined;
+    const unit = m[2].replace(/\s+/g, "");
+
+    const unitMs: Record<string, number> = {
+        ms: 1,
+        millisecond: 1,
+        milliseconds: 1,
+        s: 1000,
+        sec: 1000,
+        secs: 1000,
+        second: 1000,
+        seconds: 1000,
+        m: 60_000,
+        min: 60_000,
+        mins: 60_000,
+        minute: 60_000,
+        minutes: 60_000,
+        h: 3_600_000,
+        hr: 3_600_000,
+        hrs: 3_600_000,
+        hour: 3_600_000,
+        hours: 3_600_000,
+        d: 86_400_000,
+        day: 86_400_000,
+        days: 86_400_000,
+    };
+    const base = unitMs[unit];
+    if (!base) return undefined;
+    return Math.max(0, Math.round(value * base));
 }
