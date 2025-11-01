@@ -7,6 +7,7 @@ import {
 import { NONE_SELECTION, Poll } from "../store/polls.js";
 import { formatDateLabel } from "./date.js";
 import { renderGridPng } from "./gridImage.js";
+import { CUSTOM_ID_ACTIONS } from "./constants.js";
 
 // Ensure text content respects Discord's 2000 character limit.
 export function clampDiscordText(text: string, max = 2000): string {
@@ -76,7 +77,7 @@ export function componentsFor(poll: Poll): ActionRowBuilder<ButtonBuilder>[] {
     const label =
       d === NONE_SELECTION ? `None of these dates` : `${formatDateLabel(d)}`;
     const btn = new ButtonBuilder()
-      .setCustomId(`when:toggle:${poll.id}:${d}`)
+      .setCustomId(`when:${CUSTOM_ID_ACTIONS.TOGGLE}:${poll.id}:${d}`)
       .setLabel(label)
       .setStyle(ButtonStyle.Secondary);
     current.addComponents(btn as any);
@@ -87,15 +88,15 @@ export function componentsFor(poll: Poll): ActionRowBuilder<ButtonBuilder>[] {
   // Control row
   const controls = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setCustomId(`when:toggleAll:${poll.id}`)
+      .setCustomId(`when:${CUSTOM_ID_ACTIONS.TOGGLE_ALL}:${poll.id}`)
       .setLabel("Toggle all")
       .setStyle(ButtonStyle.Secondary) as any,
     new ButtonBuilder()
-      .setCustomId(`when:view:${poll.id}`)
+      .setCustomId(`when:${CUSTOM_ID_ACTIONS.VIEW}:${poll.id}`)
       .setLabel("Switch view")
       .setStyle(ButtonStyle.Secondary) as any,
     new ButtonBuilder()
-      .setCustomId(`when:close:${poll.id}`)
+      .setCustomId(`when:${CUSTOM_ID_ACTIONS.CLOSE}:${poll.id}`)
       .setLabel("Close poll")
       .setStyle(ButtonStyle.Danger) as any,
   );

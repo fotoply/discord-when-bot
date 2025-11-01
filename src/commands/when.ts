@@ -4,6 +4,7 @@ import type { ChatInputCommandInteraction } from "discord.js";
 import { ActionRowBuilder, StringSelectMenuBuilder } from "discord.js";
 import { buildFutureDates, formatDateLabel } from "../util/date.js";
 import { Sessions } from "../store/sessions.js";
+import { CUSTOM_ID } from "../util/constants.js";
 
 function log(...args: any[]) {
   // eslint-disable-next-line no-console
@@ -51,7 +52,7 @@ export default class WhenCommand extends Command {
     );
 
     const firstSelect = new StringSelectMenuBuilder()
-      .setCustomId("when:first")
+      .setCustomId(CUSTOM_ID.FIRST)
       .setPlaceholder("Select first date")
       .setMinValues(1)
       .setMaxValues(1)
@@ -60,7 +61,7 @@ export default class WhenCommand extends Command {
       );
 
     const lastSelect = new StringSelectMenuBuilder()
-      .setCustomId("when:last")
+      .setCustomId(CUSTOM_ID.LAST)
       .setPlaceholder("Select last date (after first)")
       .setMinValues(1)
       .setMaxValues(1)

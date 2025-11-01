@@ -4,6 +4,7 @@ import type { Channel, ChatInputCommandInteraction } from "discord.js";
 import { Polls } from "../store/polls.js";
 import { buildPollMessage, clampDiscordText } from "../util/pollRender.js";
 import { DefaultRole } from "../store/config.js";
+import { PERMISSION_ADMINISTRATOR } from "../util/constants.js";
 
 function log(...args: any[]) {
   // eslint-disable-next-line no-console
@@ -190,7 +191,7 @@ export default class PollCommand extends Command {
         member &&
         member.permissions &&
         typeof member.permissions.has === "function" &&
-        member.permissions.has("Administrator")
+        member.permissions.has(PERMISSION_ADMINISTRATOR)
       );
       if (!isAdmin) {
         await interaction.reply({
@@ -207,10 +208,6 @@ export default class PollCommand extends Command {
         return;
       }
       const action = interaction.options.getString("action") ?? "show";
-      const role = (interaction.options as any).getRole("role") as {
-        id: string;
-        name?: string;
-      } | null;
       const guildId = interaction.guild.id;
       const channelId = (interaction.channel as any).id as string;
       if (action === "show") {
@@ -232,6 +229,10 @@ export default class PollCommand extends Command {
         return;
       }
       if (action === "set") {
+        const role = (interaction.options as any).getRole("role") as {
+          id: string;
+          name?: string;
+        } | null;
         const rid = role?.id;
         if (!rid) {
           await interaction.reply({
@@ -307,7 +308,7 @@ export default class PollCommand extends Command {
         member &&
         member.permissions &&
         typeof member.permissions.has === "function" &&
-        member.permissions.has("Administrator")
+        member.permissions.has(PERMISSION_ADMINISTRATOR)
       );
       if (!isAdmin) {
         await interaction.reply({

@@ -16,6 +16,7 @@ import {
 } from "../util/date.js";
 import { buildPollMessage } from "../util/pollRender.js";
 import { DefaultRole } from "../store/config.js";
+import { CUSTOM_ID, PERMISSION_ADMINISTRATOR, parseCustomId } from "../util/constants.js";
 
 function log(...args: any[]) {
   // eslint-disable-next-line no-console
@@ -140,7 +141,7 @@ export default class InteractionCreateListener extends Listener<
     // Use type guard functions to narrow the interaction type for TypeScript
     if (
       isModalSubmitInteraction(interaction) &&
-      interaction.customId === "when:date-range"
+      interaction.customId === CUSTOM_ID.DATE_RANGE
     ) {
       log(
         "modal: date-range submitted by",
@@ -195,7 +196,7 @@ export default class InteractionCreateListener extends Listener<
 
     if (
       isStringSelectInteraction(interaction) &&
-      interaction.customId === "when:first"
+      interaction.customId === CUSTOM_ID.FIRST
     ) {
       log(
         "select: first",
@@ -208,7 +209,7 @@ export default class InteractionCreateListener extends Listener<
     }
     if (
       isStringSelectInteraction(interaction) &&
-      interaction.customId === "when:last"
+      interaction.customId === CUSTOM_ID.LAST
     ) {
       log(
         "select: last",
@@ -326,7 +327,7 @@ export default class InteractionCreateListener extends Listener<
     const filtered = future.filter((d) => d >= first);
 
     const firstSelect = new StringSelectMenuBuilder()
-      .setCustomId("when:first")
+      .setCustomId(CUSTOM_ID.FIRST)
       .setPlaceholder("Select first date")
       .setMinValues(1)
       .setMaxValues(1)
@@ -339,7 +340,7 @@ export default class InteractionCreateListener extends Listener<
       );
 
     const lastSelect = new StringSelectMenuBuilder()
-      .setCustomId("when:last")
+      .setCustomId(CUSTOM_ID.LAST)
       .setPlaceholder("Select last date (after first)")
       .setMinValues(1)
       .setMaxValues(1)
@@ -460,9 +461,9 @@ export default class InteractionCreateListener extends Listener<
   }
 
   private async handleToggle(interaction: ButtonInteraction) {
-    const parts = interaction.customId.split(":");
-    const pollId = parts[2];
-    const date = parts[3];
+    const parsed = parseCustomId(interaction.customId);
+    const pollId = parsed.pollId;
+    const date = parsed.date;
 
     const poll = pollId ? Polls.get(pollId) : null;
     if (!poll) {
@@ -512,8 +513,8 @@ export default class InteractionCreateListener extends Listener<
   }
 
   private async handleToggleAll(interaction: ButtonInteraction) {
-    const parts = interaction.customId.split(":");
-    const pollId = parts[2];
+    const parsed = parseCustomId(interaction.customId);
+    const pollId = parsed.pollId;
 
     const poll = pollId ? Polls.get(pollId) : null;
     if (!poll) {
@@ -547,8 +548,8 @@ export default class InteractionCreateListener extends Listener<
   }
 
   private async handleViewToggle(interaction: ButtonInteraction) {
-    const parts = interaction.customId.split(":");
-    const pollId = parts[2];
+    const parsed = parseCustomId(interaction.customId);
+    const pollId = parsed.pollId;
 
     const poll = pollId ? Polls.get(pollId) : null;
     if (!poll) {
@@ -580,8 +581,8 @@ export default class InteractionCreateListener extends Listener<
   }
 
   private async handleClose(interaction: ButtonInteraction) {
-    const parts = interaction.customId.split(":");
-    const pollId = parts[2];
+    const parsed = parseCustomId(interaction.customId);
+    const pollId = parsed.pollId;
 
     const poll = pollId ? Polls.get(pollId) : null;
     if (!poll) {
@@ -597,7 +598,7 @@ export default class InteractionCreateListener extends Listener<
         member &&
         member.permissions &&
         typeof member.permissions.has === "function" &&
-        member.permissions.has("Administrator")
+        member.permissions.has(PERMISSION_ADMINISTRATOR)
       );
       if (!isAdmin) {
         await interaction.reply({

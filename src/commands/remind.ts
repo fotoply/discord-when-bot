@@ -4,6 +4,7 @@ import type { ChatInputCommandInteraction } from "discord.js";
 import { Polls } from "../store/polls.js";
 import { sendReminders } from "../util/reminders.js";
 import { ReminderSettings } from "../store/config.js";
+import { PERMISSION_ADMINISTRATOR } from "../util/constants.js";
 
 function log(...args: any[]) {
   // eslint-disable-next-line no-console
@@ -73,7 +74,7 @@ export default class RemindCommand extends Command {
       member &&
       member.permissions &&
       typeof member.permissions.has === "function" &&
-      member.permissions.has("Administrator")
+      member.permissions.has(PERMISSION_ADMINISTRATOR)
     );
   }
 
