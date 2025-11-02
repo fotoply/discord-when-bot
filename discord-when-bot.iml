@@ -11,6 +11,7 @@
       <excludeFolder url="file://$MODULE_DIR$/test-data" />
       <excludeFolder url="file://$MODULE_DIR$/.stryker-tmp" />
       <excludeFolder url="file://$MODULE_DIR$/reports" />
+      <excludeFolder url="file://$MODULE_DIR$/.serena" />
     </content>
     <orderEntry type="sourceFolder" forTests="false" />
   </component>

@@ -80,7 +80,7 @@ export function componentsFor(poll: Poll): ActionRowBuilder<ButtonBuilder>[] {
       .setCustomId(`when:${CUSTOM_ID_ACTIONS.TOGGLE}:${poll.id}:${d}`)
       .setLabel(label)
       .setStyle(ButtonStyle.Secondary);
-    current.addComponents(btn as any);
+    current.addComponents(btn);
   }
 
   if (current.components.length) rows.push(current);
@@ -90,20 +90,20 @@ export function componentsFor(poll: Poll): ActionRowBuilder<ButtonBuilder>[] {
     new ButtonBuilder()
       .setCustomId(`when:${CUSTOM_ID_ACTIONS.TOGGLE_ALL}:${poll.id}`)
       .setLabel("Toggle all")
-      .setStyle(ButtonStyle.Secondary) as any,
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`when:${CUSTOM_ID_ACTIONS.VIEW}:${poll.id}`)
       .setLabel("Switch view")
-      .setStyle(ButtonStyle.Secondary) as any,
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`when:${CUSTOM_ID_ACTIONS.CLOSE}:${poll.id}`)
       .setLabel("Close poll")
-      .setStyle(ButtonStyle.Danger) as any,
+      .setStyle(ButtonStyle.Danger),
   );
   // Merge controls into last row if it fits, otherwise add as new row
   const lastRow = rows[rows.length - 1];
   if (lastRow && lastRow.components.length + controls.components.length <= 5) {
-    lastRow.addComponents(...(controls.components as any[]));
+    lastRow.addComponents(...(controls.components as ButtonBuilder[]));
   } else {
     rows.push(controls);
   }

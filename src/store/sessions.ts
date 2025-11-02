@@ -1,6 +1,7 @@
 type Session = {
   first?: string; // ISO date for first selection
   roles?: string[]; // selected role ids for pings
+  pageStart?: number; // pagination start index for first-date picker
 };
 
 class SessionStore {
@@ -24,6 +25,16 @@ class SessionStore {
 
   getRoles(userId: string): string[] | undefined {
     return this.map.get(userId)?.roles;
+  }
+
+  setPageStart(userId: string, start: number) {
+    const s = this.map.get(userId) ?? {};
+    s.pageStart = Math.max(0, Math.floor(start));
+    this.map.set(userId, s);
+  }
+
+  getPageStart(userId: string): number {
+    return this.map.get(userId)?.pageStart ?? 0;
   }
 
   clear(userId: string) {

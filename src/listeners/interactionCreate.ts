@@ -20,6 +20,7 @@ import {
   CUSTOM_ID,
   parseCustomId,
   PERMISSION_ADMINISTRATOR,
+  NAV,
 } from "../util/constants.js";
 import { cancelFor, onPollActivity } from "../util/readyNotify.js";
 
@@ -150,7 +151,7 @@ export default class InteractionCreateListener extends Listener<
     ) {
       log(
         "modal: date-range submitted by",
-        (interaction as any)?.user?.id ?? "unknown",
+        interaction.user?.id ?? "unknown",
       );
       await this.handleDateRangeModal(interaction);
       return;
@@ -158,42 +159,22 @@ export default class InteractionCreateListener extends Listener<
 
     if (isButtonInteraction(interaction)) {
       if (interaction.customId.startsWith("when:toggle:")) {
-        log(
-          "button: toggle",
-          interaction.customId,
-          "by",
-          (interaction as any)?.user?.id ?? "unknown",
-        );
+        log("button: toggle", interaction.customId, "by", interaction.user.id);
         await this.handleToggle(interaction);
         return;
       }
       if (interaction.customId.startsWith("when:toggleAll:")) {
-        log(
-          "button: toggleAll",
-          interaction.customId,
-          "by",
-          (interaction as any)?.user?.id ?? "unknown",
-        );
+        log("button: toggleAll", interaction.customId, "by", interaction.user.id);
         await this.handleToggleAll(interaction);
         return;
       }
       if (interaction.customId.startsWith("when:view:")) {
-        log(
-          "button: view",
-          interaction.customId,
-          "by",
-          (interaction as any)?.user?.id ?? "unknown",
-        );
+        log("button: view", interaction.customId, "by", interaction.user?.id ?? "unknown");
         await this.handleViewToggle(interaction);
         return;
       }
       if (interaction.customId.startsWith("when:close:")) {
-        log(
-          "button: close",
-          interaction.customId,
-          "by",
-          (interaction as any)?.user?.id ?? "unknown",
-        );
+        log("button: close", interaction.customId, "by", interaction.user.id);
         await this.handleClose(interaction);
         return;
       }
@@ -203,12 +184,7 @@ export default class InteractionCreateListener extends Listener<
       isStringSelectInteraction(interaction) &&
       interaction.customId === CUSTOM_ID.FIRST
     ) {
-      log(
-        "select: first",
-        interaction.values?.[0],
-        "by",
-        (interaction as any)?.user?.id ?? "unknown",
-      );
+      log("select: first", interaction.values?.[0], "by", interaction.user.id);
       await this.handleFirstSelect(interaction);
       return;
     }
@@ -216,12 +192,7 @@ export default class InteractionCreateListener extends Listener<
       isStringSelectInteraction(interaction) &&
       interaction.customId === CUSTOM_ID.LAST
     ) {
-      log(
-        "select: last",
-        interaction.values?.[0],
-        "by",
-        (interaction as any)?.user?.id ?? "unknown",
-      );
+      log("select: last", interaction.values?.[0], "by", interaction.user.id);
       await this.handleLastSelect(interaction);
       return;
     }
@@ -322,14 +293,72 @@ export default class InteractionCreateListener extends Listener<
   }
 
   private async handleFirstSelect(interaction: StringSelectMenuInteraction) {
-    const first = interaction.values[0];
-    if (!first) return;
+    const selected = interaction.values[0];
+    if (!selected) return;
 
+    // Navigation handling
+    if (selected === NAV.FIRST_PREV || selected === NAV.FIRST_NEXT) {
+      const all = buildFutureDates(90);
+      const current = Sessions.getPageStart(interaction.user.id);
+
+      // Compute nextStart and pageSize so dates + nav <= 25 consistently
+      const tempStart = selected === NAV.FIRST_NEXT
+        ? Math.min(current + 1, Math.max(0, all.length - 1))
+        : Math.max(0, current - 1);
+      const hasPrevEst = tempStart > 0;
+      const nextAssume = tempStart + (25 - (hasPrevEst ? 1 : 0) - 1) < all.length;
+      const pageSize = 25 - (hasPrevEst ? 1 : 0) - (nextAssume ? 1 : 0);
+      const nextStart = selected === NAV.FIRST_NEXT
+        ? Math.min(current + pageSize, Math.max(0, all.length - pageSize))
+        : Math.max(0, current - pageSize);
+
+      Sessions.setPageStart(interaction.user.id, nextStart);
+
+      const page = all.slice(nextStart, nextStart + pageSize);
+      const hasPrev = nextStart > 0;
+      const hasNext = nextStart + page.length < all.length;
+
+      const firstSelect = new StringSelectMenuBuilder()
+        .setCustomId(CUSTOM_ID.FIRST)
+        .setPlaceholder("Select first date")
+        .setMinValues(1)
+        .setMaxValues(1)
+        .addOptions(
+          [
+            ...(hasPrev ? [{ label: "◀ Previous", value: NAV.FIRST_PREV } as const] : []),
+            ...page.map((iso) => ({ label: formatDateLabel(iso), value: iso })),
+            ...(hasNext ? [{ label: "Next ▶", value: NAV.FIRST_NEXT } as const] : []),
+          ] as any,
+        );
+
+      const lastSelect = new StringSelectMenuBuilder()
+        .setCustomId(CUSTOM_ID.LAST)
+        .setPlaceholder("Select last date (after first)")
+        .setMinValues(1)
+        .setMaxValues(1)
+        .setDisabled(true)
+        .addOptions(page.map((iso) => ({ label: formatDateLabel(iso), value: iso })));
+
+      const row1 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(firstSelect);
+      const row2 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(lastSelect);
+      await interaction.update({ components: [row1, row2] });
+      return;
+    }
+
+    // Treat as picking a real first date
+    const first = selected;
     Sessions.setFirst(interaction.user.id, first);
     log("first-select: set for user", interaction.user.id, "to", first);
 
-    const future = buildFutureDates(20);
-    const filtered = future.filter((d) => d >= first);
+    // Build first menu using current page (keep nav <= 25)
+    const all = buildFutureDates(90);
+    const start = Sessions.getPageStart(interaction.user.id);
+    const hasPrevEst = start > 0;
+    const nextAssume = start + (25 - (hasPrevEst ? 1 : 0) - 1) < all.length;
+    const pageSize = 25 - (hasPrevEst ? 1 : 0) - (nextAssume ? 1 : 0);
+    const page = all.slice(start, start + pageSize);
+    const hasPrev = start > 0;
+    const hasNext = start + page.length < all.length;
 
     const firstSelect = new StringSelectMenuBuilder()
       .setCustomId(CUSTOM_ID.FIRST)
@@ -337,12 +366,23 @@ export default class InteractionCreateListener extends Listener<
       .setMinValues(1)
       .setMaxValues(1)
       .addOptions(
-        future.map((iso) => ({
-          label: formatDateLabel(iso),
-          value: iso,
-          default: iso === first,
-        })),
+        [
+          ...(hasPrev ? [{ label: "◀ Previous", value: NAV.FIRST_PREV } as const] : []),
+          ...page.map((iso) => ({
+            label: formatDateLabel(iso),
+            value: iso,
+            default: iso === first,
+          })),
+          ...(hasNext ? [{ label: "Next ▶", value: NAV.FIRST_NEXT } as const] : []),
+        ] as any,
       );
+
+    // Build last-date options as the next 20 days starting from the selected first date (inclusive)
+    const startDate = new Date(first + "T00:00:00Z");
+    const end = new Date(startDate);
+    end.setUTCDate(end.getUTCDate() + 19);
+    const endIso = `${end.getUTCFullYear()}-${String(end.getUTCMonth() + 1).padStart(2, "0")}-${String(end.getUTCDate()).padStart(2, "0")}`;
+    const lastOptions = (buildDateRange(first, endIso) ?? [first]).slice(0, 20);
 
     const lastSelect = new StringSelectMenuBuilder()
       .setCustomId(CUSTOM_ID.LAST)
@@ -350,16 +390,10 @@ export default class InteractionCreateListener extends Listener<
       .setMinValues(1)
       .setMaxValues(1)
       .setDisabled(false)
-      .addOptions(
-        filtered.map((iso) => ({ label: formatDateLabel(iso), value: iso })),
-      );
+      .addOptions(lastOptions.map((iso) => ({ label: formatDateLabel(iso), value: iso })));
 
-    const row1 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-      firstSelect,
-    );
-    const row2 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-      lastSelect,
-    );
+    const row1 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(firstSelect);
+    const row2 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(lastSelect);
 
     await interaction.update({ components: [row1, row2] });
   }
@@ -411,31 +445,20 @@ export default class InteractionCreateListener extends Listener<
       return;
     }
 
-    // Roles from session (selected via /when optional role param)
+    // Roles from session
     let roles = Sessions.getRoles(interaction.user.id);
-    // Fallback to channel default role when none selected
     if (!roles || roles.length === 0) {
-      const channelId = (interaction.channel as any).id as string | undefined;
-      const def = DefaultRole.get(
-        (interaction as any).guildId,
-        channelId ?? "",
-      );
+      const channelId = interaction.channel?.id;
+      const def = DefaultRole.get(interaction.guildId, channelId ?? "");
       if (def) roles = [def];
     }
     const poll = Polls.createPoll({
-      channelId: (interaction.channel as any).id,
+      channelId: interaction.channel!.id,
       creatorId: interaction.user.id,
       dates,
       roles,
     });
-    log(
-      "last-select: created poll",
-      poll.id,
-      "channel",
-      (interaction.channel as any).id,
-      "roles=",
-      roles?.length ?? 0,
-    );
+    log("last-select: created poll", poll.id, "channel", interaction.channel!.id, "roles=", roles?.length ?? 0);
     const extras = await this.buildGridExtras(poll, interaction);
     const messageOpts = buildPollMessage(poll, extras);
 
@@ -450,13 +473,8 @@ export default class InteractionCreateListener extends Listener<
       else messageOpts.content = mentions;
     }
 
-    const message = await (interaction.channel as any).send(messageOpts as any);
-    log(
-      "last-select: posted message",
-      (message as any)?.id ?? "unknown",
-      "for poll",
-      poll.id,
-    );
+    const message = await interaction.channel!.send(messageOpts as any);
+    log("last-select: posted message", (message as any)?.id ?? "unknown", "for poll", poll.id);
 
     Polls.setMessageId(poll.id, (message as any).id);
 
@@ -557,9 +575,9 @@ export default class InteractionCreateListener extends Listener<
     log("toggleAll: updated poll", poll.id, "user", interaction.user.id);
 
     // Schedule/cancel ready notification based on current responders
-    const client: any = (interaction as any).client;
-    const guild: any = (interaction as any).guild;
-    if (client && guild) await onPollActivity(client, updated as any, guild);
+    const client: any = interaction.client;
+    const guild: any = interaction.guild;
+    if (client && guild) await onPollActivity(client, updated, guild);
   }
 
   private async handleViewToggle(interaction: ButtonInteraction) {
@@ -581,18 +599,13 @@ export default class InteractionCreateListener extends Listener<
       return;
     }
 
-    // Toggle view mode and ensure the in-memory poll reflects the change (some test mocks may rely on it)
+    // Toggle view mode and ensure the in-memory poll reflects the change (tests rely on it)
     const newMode = Polls.toggleViewMode(poll.id);
     const updated = Polls.get(poll.id)!;
     if (newMode) updated.viewMode = newMode;
     const extras = await this.buildGridExtras(updated, interaction);
     await interaction.update(buildPollMessage(updated, extras) as any);
-    log(
-      "view: toggled view mode for poll",
-      poll.id,
-      "to",
-      newMode ?? updated.viewMode,
-    );
+    log("view: toggled view mode for poll", poll.id, "to", newMode ?? updated.viewMode);
   }
 
   private async handleClose(interaction: ButtonInteraction) {
@@ -609,8 +622,7 @@ export default class InteractionCreateListener extends Listener<
     // Only the poll creator or a guild admin may close the poll
     if (interaction.user.id !== poll.creatorId) {
       const member = (interaction as any).member;
-      const isAdmin =
-        member?.permissions?.has?.(PERMISSION_ADMINISTRATOR) === true;
+      const isAdmin = member?.permissions?.has?.(PERMISSION_ADMINISTRATOR) === true;
       if (!isAdmin) {
         await interaction.reply({
           content: "Only the poll creator can close this poll.",
@@ -640,3 +652,4 @@ export default class InteractionCreateListener extends Listener<
     cancelFor(poll.id);
   }
 }
+

@@ -229,6 +229,10 @@ export class MockFramework {
       reply: vi.fn().mockResolvedValue(undefined),
       channel,
       inGuild: () => true,
+      user: options?.userId ? { id: options.userId } : undefined,
+      options: {
+        getRole: vi.fn().mockReturnValue(null),
+      },
     };
     await (CmdClass as any).prototype.chatInputRun.call(
       { name: commandName },

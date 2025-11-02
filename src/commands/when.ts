@@ -1,10 +1,10 @@
 import { ApplyOptions } from "@sapphire/decorators";
 import { Command } from "@sapphire/framework";
-import type { ChatInputCommandInteraction } from "discord.js";
+import type { ChatInputCommandInteraction, SelectMenuComponentOptionData } from "discord.js";
 import { ActionRowBuilder, StringSelectMenuBuilder } from "discord.js";
 import { buildFutureDates, formatDateLabel } from "../util/date.js";
 import { Sessions } from "../store/sessions.js";
-import { CUSTOM_ID } from "../util/constants.js";
+import { CUSTOM_ID, NAV } from "../util/constants.js";
 
 function log(...args: any[]) {
   // eslint-disable-next-line no-console
@@ -35,30 +35,46 @@ export default class WhenCommand extends Command {
   }
 
   public override async chatInputRun(interaction: ChatInputCommandInteraction) {
-    const isoDates = buildFutureDates(20);
-    const role = (interaction.options as any)?.getRole?.("role") as
-      | { id: string }
-      | null
-      | undefined;
-    // Persist selected role id in session for this user during the flow (guard for tests that omit user)
-    if ((interaction as any)?.user?.id) {
-      Sessions.setRoles(
-        (interaction.user as any).id,
-        role?.id ? [role.id] : [],
-      );
+    const allFirstDates = buildFutureDates(90);
+    // initialize pagination at the first page if we have a user id
+    const userId = interaction.user?.id;
+    if (userId) Sessions.setPageStart(userId, 0);
+    const start = userId ? Sessions.getPageStart(userId) : 0;
+
+    // Compute page size based on nav presence so that dates + nav <= 25
+    const hasPrev = start > 0;
+    const nextAssume = start + (25 - (hasPrev ? 1 : 0) - 1) < allFirstDates.length;
+    const pageSize = 25 - (hasPrev ? 1 : 0) - (nextAssume ? 1 : 0);
+    const page = allFirstDates.slice(start, start + pageSize);
+    const hasNext = start + page.length < allFirstDates.length;
+    const isoDates = page;
+
+    const role = interaction.options.getRole("role");
+    if (userId) {
+      // Persist selected role id in session for this user during the flow
+      Sessions.setRoles(userId, role?.id ? [role.id] : []);
     }
     log(
-      `invoke: guild=${interaction.guildId ?? "dm"} channel=${(interaction.channel as any)?.id ?? "unknown"} dates=${isoDates.length}`,
+      `invoke: guild=${interaction.guildId ?? "dm"} channel=${interaction.channel?.id ?? "unknown"} dates=${allFirstDates.length}`,
     );
+
+    const firstOptions: SelectMenuComponentOptionData[] = [
+      ...(hasPrev ? [{ label: "◀ Previous", value: NAV.FIRST_PREV }] : []),
+      ...isoDates.map((iso) => ({ label: formatDateLabel(iso), value: iso })),
+      ...(hasNext ? [{ label: "Next ▶", value: NAV.FIRST_NEXT }] : []),
+    ];
 
     const firstSelect = new StringSelectMenuBuilder()
       .setCustomId(CUSTOM_ID.FIRST)
       .setPlaceholder("Select first date")
       .setMinValues(1)
       .setMaxValues(1)
-      .addOptions(
-        isoDates.map((iso) => ({ label: formatDateLabel(iso), value: iso })),
-      );
+      .addOptions(...firstOptions);
+
+    const lastOptions: SelectMenuComponentOptionData[] = isoDates.map((iso) => ({
+      label: formatDateLabel(iso),
+      value: iso,
+    }));
 
     const lastSelect = new StringSelectMenuBuilder()
       .setCustomId(CUSTOM_ID.LAST)
@@ -66,10 +82,7 @@ export default class WhenCommand extends Command {
       .setMinValues(1)
       .setMaxValues(1)
       .setDisabled(true)
-      .addOptions(
-        // Placeholder options; will be replaced upon first selection
-        isoDates.map((iso) => ({ label: formatDateLabel(iso), value: iso })),
-      );
+      .addOptions(...lastOptions);
 
     const row1 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
       firstSelect,

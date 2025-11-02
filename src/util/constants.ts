@@ -17,6 +17,11 @@ export const CUSTOM_ID_ACTIONS = {
   CLOSE: "close",
 } as const;
 
+export const NAV = {
+  FIRST_PREV: "__nav:first:prev__",
+  FIRST_NEXT: "__nav:first:next__",
+} as const;
+
 export type CustomIdKind =
   | typeof CUSTOM_ID_ACTIONS.TOGGLE
   | typeof CUSTOM_ID_ACTIONS.TOGGLE_ALL
