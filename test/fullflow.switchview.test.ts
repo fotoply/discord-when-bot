@@ -29,7 +29,8 @@ describe("Full-flow: Switch view toggles grid and back", () => {
     );
     expect(lastIx.update).toHaveBeenCalled();
 
-    const poll = Polls.allOpen()[0]!;
+    const open = Polls.allOpen();
+    const poll = open[open.length - 1]!;
 
     // Toggle to grid
     const viewBtn = `when:view:${poll.id}`;

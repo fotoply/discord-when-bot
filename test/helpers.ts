@@ -277,3 +277,16 @@ export class MockFramework {
     return interaction;
   }
 }
+
+// ===== Test utilities for component inspection =====
+export function getSelectOptionsFrom(payload: any, rowIndex = 0): any[] {
+  if (!payload) return [];
+  const rows = payload.components ?? [];
+  const row = rows[rowIndex];
+  if (!row) return [];
+  const rowJson = typeof row.toJSON === "function" ? row.toJSON() : row;
+  const menu = rowJson?.components?.[0];
+  if (!menu) return [];
+  const menuJson = typeof menu.toJSON === "function" ? menu.toJSON() : menu;
+  return menuJson?.options ?? [];
+}
