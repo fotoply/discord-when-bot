@@ -31,12 +31,12 @@ function log(...args: any[]) {
   console.log("[interact]", ...args);
 }
 
-function gridExtrasContextFrom(interaction: Interaction): GridExtrasContext {
-  const guild = (interaction as any).guild;
-  const client = (interaction as any).client;
-  if (!guild && !client) return null;
-  return { guild, client };
-}
+export function gridExtrasContextFrom(interaction: Interaction): GridExtrasContext {
+   const guild = (interaction as any).guild;
+   const client = (interaction as any).client;
+   if (!guild && !client) return null;
+   return { guild, client };
+ }
 
 // Type guards for narrowing Interaction to specific interaction types
 function isModalSubmitInteraction(
@@ -591,4 +591,3 @@ export default class InteractionCreateListener extends Listener<
     cancelFor(poll.id);
   }
 }
-

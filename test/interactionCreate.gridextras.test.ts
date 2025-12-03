@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { buildGridExtras } from "../src/util/gridExtras.js";
+import type { GridExtrasContext } from "../src/util/gridExtras.js";
 import { Polls, NONE_SELECTION } from "../src/store/polls.js";
 
 function makePollWithVotes(userIds: string[], dates: string[]) {
@@ -300,5 +301,13 @@ describe("gridExtras.buildGridExtras", () => {
     } finally {
       (globalThis as any).fetch = oldFetch;
     }
+  });
+
+  it("handles null context gracefully", async () => {
+    const poll = makePollWithVotes(["user"], ["2025-05-01"]);
+    const extras = await buildGridExtras(poll, null as GridExtrasContext);
+    expect(extras.userIds).toEqual(["user"]);
+    expect(extras.rowAvatars?.[0]).toBeUndefined();
+    expect(extras.userLabelResolver("user")).toBe("user");
   });
 });

@@ -285,6 +285,43 @@ describe("util/reminders", () => {
     expect(setReminderMessageId).toHaveBeenCalledWith("p6", "new-6");
   });
 
+  it("continues when guild.members.fetch rejects", async () => {
+    const poll = {
+      id: "p6b",
+      channelId: "c6b",
+      messageId: "poll-msg",
+      selections: makeSelections(["u1"]),
+    };
+    const setReminderMessageId = vi.fn();
+    const Polls = { allOpen: vi.fn(() => [poll]), setReminderMessageId } as any;
+
+    const sendMock = vi.fn(() => Promise.resolve({ id: "new-6b" }));
+    const members = new Map<string, any>([
+      ["u1", { id: "u1", user: { bot: false } }],
+      ["u3", { id: "u3", user: { bot: false } }],
+    ]);
+    const guild = {
+      members: {
+        cache: members,
+        fetch: vi.fn(() => Promise.reject(new Error("nope"))),
+      },
+    } as any;
+    const channel = {
+      guild,
+      send: sendMock,
+      messages: { delete: vi.fn() },
+    } as any;
+    const client = {
+      channels: { fetch: vi.fn(() => Promise.resolve(channel)) },
+    } as any;
+
+    await sendReminders(client, Polls);
+
+    expect(guild.members.fetch).toHaveBeenCalled();
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(setReminderMessageId).toHaveBeenCalledWith("p6b", "new-6b");
+  });
+
   it("swallows delete errors and continues to send a new reminder", async () => {
     const poll = {
       id: "p7",
