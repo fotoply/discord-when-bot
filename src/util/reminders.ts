@@ -119,7 +119,7 @@ export function computeNonResponders(poll: any, guild: any): string[] {
   const toPing: string[] = [];
   const cache = guild?.members?.cache as Map<string, GuildMember> | any;
   const iter =
-    cache && typeof cache.values === "function"
+    cache?.values
       ? cache.values()
       : cache
         ? Object.values(cache)
@@ -154,10 +154,7 @@ export function computeNonResponders(poll: any, guild: any): string[] {
             break;
           }
         }
-      } else if (
-        m?.roles?.cache &&
-        typeof m.roles.cache.forEach === "function"
-      ) {
+      } else if (m?.roles?.cache?.forEach) {
         m.roles.cache.forEach((_v: any, k: string) => {
           if (roleSet.has(String(k))) hasRole = true;
         });
@@ -188,11 +185,7 @@ export async function sendReminders(
           log(`fetch channel failed for ${poll.channelId}:`, e?.message ?? e);
           return null;
         })) as any;
-      if (
-        !channel ||
-        !("messages" in channel) ||
-        typeof channel.send !== "function"
-      ) {
+      if (!channel || !("messages" in channel) || !channel.send) {
         log(`skip poll ${poll.id}: channel not sendable`);
         continue;
       }
@@ -204,10 +197,8 @@ export async function sendReminders(
       }
 
       // Per-channel reminders configuration; guard against missing ids in tests/mocks
-      const guildId: string | undefined =
-        typeof guild.id === "string" ? guild.id : undefined;
-      const chanId: string | undefined =
-        typeof channel.id === "string" ? channel.id : poll.channelId;
+      const guildId: string | undefined = guild?.id;
+      const chanId: string | undefined = channel?.id ?? poll.channelId;
 
       let enabled = true;
       let intervalHours = 24;

@@ -8,6 +8,7 @@ import { NONE_SELECTION, Poll } from "../store/polls.js";
 import { formatDateLabel } from "./date.js";
 import { renderGridPng } from "./gridImage.js";
 import { CUSTOM_ID_ACTIONS } from "./constants.js";
+import type { GridExtras } from "./gridExtras.js";
 
 // Ensure text content respects Discord's 2000 character limit.
 export function clampDiscordText(text: string, max = 2000): string {
@@ -231,13 +232,6 @@ export function fitDisplayLabel(
   if (out.length > maxChars) out = out.slice(0, maxChars);
   return out;
 }
-
-type GridExtras = {
-  userIds?: string[];
-  rowLabels?: string[];
-  rowAvatars?: (Buffer | undefined)[];
-  userLabelResolver?: (id: string) => string | undefined;
-};
 
 function buildGridImageEmbed(
   poll: Poll,

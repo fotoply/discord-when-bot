@@ -124,7 +124,7 @@ export default class RemindCommand extends Command {
     if (sub === "now") {
       // Defer quickly (ephemeral) when possible to avoid 3s timeout, then trigger reminders without awaiting
       let deferred = false;
-      if (typeof (interaction as any).deferReply === "function") {
+      if ((interaction as any).deferReply) {
         try {
           await interaction.deferReply({ ephemeral: true });
           deferred = true;

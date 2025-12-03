@@ -15,6 +15,8 @@ import {
   isValidISODate,
 } from "../util/date.js";
 import { buildPollMessage } from "../util/pollRender.js";
+import { buildGridExtras } from "../util/gridExtras.js";
+import type { GridExtrasContext } from "../util/gridExtras.js";
 import { DefaultRole } from "../store/config.js";
 import {
   CUSTOM_ID,
@@ -27,6 +29,13 @@ import { cancelFor, onPollActivity } from "../util/readyNotify.js";
 function log(...args: any[]) {
   // eslint-disable-next-line no-console
   console.log("[interact]", ...args);
+}
+
+function gridExtrasContextFrom(interaction: Interaction): GridExtrasContext {
+  const guild = (interaction as any).guild;
+  const client = (interaction as any).client;
+  if (!guild && !client) return null;
+  return { guild, client };
 }
 
 // Type guards for narrowing Interaction to specific interaction types
@@ -59,88 +68,6 @@ export default class InteractionCreateListener extends Listener<
     options: Listener.Options = {},
   ) {
     super(context, { ...options, event: Events.InteractionCreate });
-  }
-
-  private async buildGridExtras(
-    poll: import("../store/polls.js").Poll,
-    interaction: any,
-  ) {
-    const usersSet = new Set<string>();
-    for (const [, set] of poll.selections) for (const u of set) usersSet.add(u);
-    // Ensure deterministic ordering of user ids
-    const userIds = Array.from(usersSet).sort();
-
-    const labelMap = new Map<string, string>();
-    const rowAvatars: (Buffer | undefined)[] = [];
-
-    // Helper to fetch member and user with graceful fallback (cache first, then fetch)
-    const getMember = async (id: string) => {
-      const cached = interaction?.guild?.members?.cache?.get?.(id);
-      if (cached) return cached;
-      try {
-        if (interaction?.guild?.members?.fetch)
-          return await interaction.guild.members.fetch(id);
-      } catch {}
-      return undefined;
-    };
-    const getUser = async (id: string) => {
-      const cached = interaction?.client?.users?.cache?.get?.(id);
-      if (cached) return cached;
-      try {
-        if (interaction?.client?.users?.fetch)
-          return await interaction.client.users.fetch(id);
-      } catch {}
-      return undefined;
-    };
-
-    for (const id of userIds) {
-      let label: string | undefined;
-      let avatarBuf: Buffer | undefined;
-
-      const member = await getMember(id);
-      // Deterministic fallback order for labels. Prefer member values first
-      // then fall back to user-level values, finally the id as last resort.
-      if (member) {
-        const u = member.user ?? (member as any);
-        label = (member.displayName ??
-          member.nickname ??
-          u?.globalName ??
-          u?.username) as string | undefined;
-      }
-      if (!label) {
-        const user = await getUser(id);
-        label =
-          (user as any)?.displayName ??
-          (user as any)?.globalName ??
-          user?.username;
-      }
-      if (!label) label = id;
-      labelMap.set(id, (String(label) ?? "").trim());
-
-      // avatar fetch (best effort; skip on failure)
-      try {
-        const userObj = member?.user ?? (await getUser(id));
-        // Prefer calling displayAvatarURL with sensible options if present.
-        const url =
-          typeof userObj?.displayAvatarURL === "function"
-            ? userObj.displayAvatarURL({ extension: "png", size: 128 })
-            : undefined;
-        if (url && typeof (globalThis as any).fetch === "function") {
-          const res = await (globalThis as any).fetch(url);
-          if (res?.ok) {
-            const ab = await res.arrayBuffer();
-            avatarBuf = Buffer.from(ab);
-          }
-        }
-      } catch {}
-      rowAvatars.push(avatarBuf);
-    }
-
-    return {
-      userIds,
-      rowAvatars,
-      userLabelResolver: (id: string) => labelMap.get(id),
-    };
   }
 
   public async run(interaction: Interaction) {
@@ -266,7 +193,10 @@ export default class InteractionCreateListener extends Listener<
       roles?.length ?? 0,
     );
 
-    const extras = await this.buildGridExtras(poll, interaction);
+    const extras = await buildGridExtras(
+      poll,
+      gridExtrasContextFrom(interaction),
+    );
     const message = buildPollMessage(poll, extras);
 
     // Prepend role mentions if any
@@ -459,7 +389,10 @@ export default class InteractionCreateListener extends Listener<
       roles,
     });
     log("last-select: created poll", poll.id, "channel", interaction.channel!.id, "roles=", roles?.length ?? 0);
-    const extras = await this.buildGridExtras(poll, interaction);
+    const extras = await buildGridExtras(
+      poll,
+      gridExtrasContextFrom(interaction),
+    );
     const messageOpts = buildPollMessage(poll, extras);
 
     // Prepend role mentions if any
@@ -523,7 +456,10 @@ export default class InteractionCreateListener extends Listener<
     }
 
     const updated = Polls.get(poll.id)!;
-    const extras = await this.buildGridExtras(updated, interaction);
+    const extras = await buildGridExtras(
+      updated,
+      gridExtrasContextFrom(interaction),
+    );
     await interaction.update(buildPollMessage(updated, extras) as any);
     log(
       "toggle: updated poll",
@@ -570,7 +506,10 @@ export default class InteractionCreateListener extends Listener<
     }
 
     const updated = Polls.get(poll.id)!;
-    const extras = await this.buildGridExtras(updated, interaction);
+    const extras = await buildGridExtras(
+      updated,
+      gridExtrasContextFrom(interaction),
+    );
     await interaction.update(buildPollMessage(updated, extras) as any);
     log("toggleAll: updated poll", poll.id, "user", interaction.user.id);
 
@@ -603,7 +542,7 @@ export default class InteractionCreateListener extends Listener<
     const newMode = Polls.toggleViewMode(poll.id);
     const updated = Polls.get(poll.id)!;
     if (newMode) updated.viewMode = newMode;
-    const extras = await this.buildGridExtras(updated, interaction);
+    const extras = await buildGridExtras(updated, gridExtrasContextFrom(interaction));
     await interaction.update(buildPollMessage(updated, extras) as any);
     log("view: toggled view mode for poll", poll.id, "to", newMode ?? updated.viewMode);
   }
@@ -644,7 +583,7 @@ export default class InteractionCreateListener extends Listener<
 
     Polls.close(poll.id);
     const updated = Polls.get(poll.id)!;
-    const extras = await this.buildGridExtras(updated, interaction);
+    const extras = await buildGridExtras(updated, gridExtrasContextFrom(interaction));
     await interaction.update(buildPollMessage(updated, extras) as any);
     log("close: closed poll", poll.id);
 

@@ -24,7 +24,7 @@ describe("Poll command invalid channel branches", () => {
       options: {
         getSubcommand: () => "repost",
         getString: (k: string) => poll.id,
-        getChannel: () => ({ id: "bad-chan", isTextBased: false }),
+        getChannel: () => ({ id: "bad-chan", isTextBased: () => false }),
       },
       user: { id: "creatorIC" },
       reply: vi.fn().mockResolvedValue(undefined),

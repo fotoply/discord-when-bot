@@ -126,11 +126,7 @@ export default class PollCommand extends Command {
         destChannel = interaction.channel ?? null;
       }
 
-      if (
-        !destChannel ||
-        !(destChannel as any).isTextBased ||
-        typeof (destChannel as any).isTextBased !== "function"
-      ) {
+      if (!destChannel?.isTextBased?.()) {
         await interaction.reply({
           content: "Please specify a text channel to post the poll in.",
           ephemeral: true,
@@ -146,11 +142,7 @@ export default class PollCommand extends Command {
           const oldChannel = await this.container.client.channels
             .fetch(poll.channelId as string)
             .catch(() => null);
-          if (
-            oldChannel &&
-            (oldChannel as any).isTextBased &&
-            typeof (oldChannel as any).isTextBased === "function"
-          ) {
+          if (oldChannel?.isTextBased?.()) {
             const oldMsg = await (oldChannel as any).messages
               .fetch(poll.messageId)
               .catch(() => null);
@@ -260,7 +252,7 @@ export default class PollCommand extends Command {
   public override async messageRun(interaction: any) {
     try {
       let usedDefer = false;
-      if (typeof interaction.deferReply === "function") {
+      if (interaction.deferReply) {
         try {
           await interaction.deferReply({ ephemeral: true });
           usedDefer = true;
@@ -274,7 +266,7 @@ export default class PollCommand extends Command {
       );
       const foundPoll = Polls.findByMessageId(message.id);
       if (!foundPoll) {
-        if (usedDefer && typeof interaction.editReply === "function") {
+        if (usedDefer && interaction.editReply) {
           await interaction
             .editReply({ content: "This message is not a poll." })
             .catch(() => {});
@@ -287,7 +279,7 @@ export default class PollCommand extends Command {
         return;
       }
       if (!foundPoll.closed) {
-        if (usedDefer && typeof interaction.editReply === "function") {
+        if (usedDefer && interaction.editReply) {
           await interaction
             .editReply({ content: "Poll is already open." })
             .catch(() => {});
@@ -320,15 +312,11 @@ export default class PollCommand extends Command {
         const client =
           (this as any)?.container?.client ?? (interaction as any)?.client;
         const channels = client?.channels;
-        if (channels && typeof channels.fetch === "function") {
+        if (channels?.fetch) {
           const oldChannel = await channels
             .fetch(foundPoll.channelId as string)
             .catch(() => null);
-          if (
-            oldChannel &&
-            (oldChannel as any).isTextBased &&
-            typeof (oldChannel as any).isTextBased === "function"
-          ) {
+          if (oldChannel?.isTextBased?.()) {
             const oldMsg = await (oldChannel as any).messages
               .fetch(foundPoll.messageId as string)
               .catch(() => null);
@@ -343,7 +331,7 @@ export default class PollCommand extends Command {
         // ignore errors editing original message
       }
 
-      if (usedDefer && typeof interaction.editReply === "function") {
+      if (usedDefer && interaction.editReply) {
         await interaction
           .editReply({ content: `Poll ${foundPoll.id} has been reopened.` })
           .catch(() => {});
@@ -356,18 +344,12 @@ export default class PollCommand extends Command {
     } catch (err: any) {
       console.error("Error handling Reopen poll context menu:", err);
       try {
-        if (
-          typeof interaction.editReply === "function" &&
-          (interaction.deferred || interaction.replied)
-        ) {
+        if (interaction.editReply && (interaction.deferred || interaction.replied)) {
           await interaction.followUp({
             content: "An internal error occurred while reopening the poll.",
             ephemeral: true,
           });
-        } else if (
-          typeof interaction.editReply === "function" &&
-          interaction.deferred
-        ) {
+        } else if (interaction.editReply && interaction.deferred) {
           await interaction
             .editReply({
               content: "An internal error occurred while reopening the poll.",

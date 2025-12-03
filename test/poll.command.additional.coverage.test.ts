@@ -160,7 +160,7 @@ describe("Poll command additional coverage", () => {
     expect(arg.content).toMatch(/Please specify a text channel/);
   });
 
-  it("repost rejects when destination channel has non-function isTextBased property", async () => {
+  it("repost rejects when destination channel reports non-text-based", async () => {
     const poll = Polls.createPoll({
       channelId: "chan-badfn",
       creatorId: "creatorBF",
@@ -172,7 +172,7 @@ describe("Poll command additional coverage", () => {
       options: {
         getSubcommand: () => "repost",
         getString: () => poll.id,
-        getChannel: () => ({ id: "weird-chan", isTextBased: true }), // not a function
+        getChannel: () => ({ id: "weird-chan", isTextBased: () => false }),
       },
       user: { id: "creatorBF" },
       reply: vi.fn().mockResolvedValue(undefined),

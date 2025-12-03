@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import InteractionCreateListener from "../src/listeners/interactionCreate.js";
+import { buildGridExtras } from "../src/util/gridExtras.js";
 import { Polls, NONE_SELECTION } from "../src/store/polls.js";
 
 function makePollWithVotes(userIds: string[], dates: string[]) {
@@ -18,14 +18,12 @@ function makePollWithVotes(userIds: string[], dates: string[]) {
   return Polls.get(poll.id)!;
 }
 
-describe("InteractionCreate.buildGridExtras", () => {
+describe("gridExtras.buildGridExtras", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
   it("collects labels from member cache and fetches avatars via global fetch", async () => {
-    const listener = new InteractionCreateListener({} as any);
-
     const poll = makePollWithVotes(["u1", "u2"], ["2025-01-01", "2025-01-02"]);
 
     // mock guild members cache and client users cache
@@ -63,7 +61,7 @@ describe("InteractionCreate.buildGridExtras", () => {
       .mockResolvedValue({ ok: true, arrayBuffer: async () => fakePng.buffer });
     (globalThis as any).fetch = fetchMock;
 
-    const extras = await (listener as any).buildGridExtras(poll, interaction);
+    const extras = await buildGridExtras(poll, interaction);
 
     expect(extras.userIds).toEqual(["u1", "u2"]);
     expect(extras.userLabelResolver("u1")).toBe("Alice");
@@ -74,7 +72,6 @@ describe("InteractionCreate.buildGridExtras", () => {
   });
 
   it("falls back gracefully when caches/fetch fail and when no global fetch is present", async () => {
-    const listener = new InteractionCreateListener({} as any);
     const poll = makePollWithVotes(["u3"], ["2025-01-03"]);
 
     const interaction: any = {
@@ -96,7 +93,7 @@ describe("InteractionCreate.buildGridExtras", () => {
     const oldFetch = (globalThis as any).fetch;
     try {
       (globalThis as any).fetch = undefined;
-      const extras = await (listener as any).buildGridExtras(poll, interaction);
+      const extras = await buildGridExtras(poll, interaction);
       expect(extras.userIds).toEqual(["u3"]);
       // label may be empty string when both member and user missing
       expect(extras.userLabelResolver("u3") ?? "").toBeTypeOf("string");
@@ -107,7 +104,6 @@ describe("InteractionCreate.buildGridExtras", () => {
   });
 
   it("uses nickname/globalName fallbacks and skips avatar when fetch ok=false", async () => {
-    const listener = new InteractionCreateListener({} as any);
     const poll = makePollWithVotes(["u4", "u5"], ["2025-02-01"]);
 
     const memberU4 = {
@@ -138,13 +134,12 @@ describe("InteractionCreate.buildGridExtras", () => {
       },
     };
 
-    const fetchMock = vi.fn().mockResolvedValue({
+    (globalThis as any).fetch = vi.fn().mockResolvedValue({
       ok: false,
       arrayBuffer: async () => new ArrayBuffer(0),
     });
-    (globalThis as any).fetch = fetchMock;
 
-    const extras = await (listener as any).buildGridExtras(poll, interaction);
+    const extras = await buildGridExtras(poll, interaction);
     expect(extras.userLabelResolver("u4")).toBe("Nick4");
     // Depending on environment/mocks, the fallback for user u5 may resolve to
     // a globalName or to another available fallback. Ensure we at least get a
@@ -157,7 +152,6 @@ describe("InteractionCreate.buildGridExtras", () => {
   });
 
   it("resolves labels deterministically across many fallbacks", async () => {
-    const listener = new InteractionCreateListener({} as any);
     const ids = [
       "m_disp",
       "m_nick",
@@ -233,7 +227,7 @@ describe("InteractionCreate.buildGridExtras", () => {
     const oldFetch = (globalThis as any).fetch;
     try {
       (globalThis as any).fetch = undefined;
-      const extras = await (listener as any).buildGridExtras(poll, interaction);
+      const extras = await buildGridExtras(poll, interaction);
       // userIds are sorted deterministically
       expect(extras.userIds).toEqual(ids.slice().sort());
       expect(extras.userLabelResolver("m_disp")).toBe("Member Display");
@@ -249,7 +243,6 @@ describe("InteractionCreate.buildGridExtras", () => {
   });
 
   it("skips avatar fetch when displayAvatarURL is not a function", async () => {
-    const listener = new InteractionCreateListener({} as any);
     const ids = ["na1"];
     const poll = makePollWithVotes(ids, ["2026-01-01"]);
 
@@ -275,7 +268,7 @@ describe("InteractionCreate.buildGridExtras", () => {
     const oldFetch = (globalThis as any).fetch;
     try {
       (globalThis as any).fetch = fetchMock;
-      const extras = await (listener as any).buildGridExtras(poll, interaction);
+      const extras = await buildGridExtras(poll, interaction);
       expect(extras.userLabelResolver("na1")).toBe("NA");
       expect(extras.rowAvatars?.[0]).toBeUndefined();
       expect(fetchMock).not.toHaveBeenCalled();
@@ -285,7 +278,6 @@ describe("InteractionCreate.buildGridExtras", () => {
   });
 
   it("handles avatar fetch throwing exceptions gracefully (caught)", async () => {
-    const listener = new InteractionCreateListener({} as any);
     const poll = makePollWithVotes(["u6"], ["2025-03-01"]);
 
     const member = {
@@ -302,7 +294,7 @@ describe("InteractionCreate.buildGridExtras", () => {
       (globalThis as any).fetch = () => {
         throw new Error("network");
       };
-      const extras = await (listener as any).buildGridExtras(poll, interaction);
+      const extras = await buildGridExtras(poll, interaction);
       expect(extras.userLabelResolver("u6")).toBe("U6");
       expect(extras.rowAvatars?.[0]).toBeUndefined();
     } finally {
