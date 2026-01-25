@@ -373,8 +373,9 @@ describe("Poll command additional coverage", () => {
     await PollCommand.prototype.messageRun.call(fakeCmd, interaction as any);
 
     expect(interaction.deferReply).toHaveBeenCalled();
-    expect(interaction.reply).toHaveBeenCalled();
-    const arg = interaction.reply.mock.calls[0][0];
+    expect(interaction.editReply).toHaveBeenCalled();
+    expect(interaction.reply).not.toHaveBeenCalled();
+    const arg = interaction.editReply.mock.calls[0][0];
     expect(arg.content).toContain("Only an admin");
   });
 
@@ -454,8 +455,8 @@ describe("Poll command additional coverage", () => {
     await PollCommand.prototype.messageRun.call(fakeCmd, interaction as any);
 
     expect(errSpy).toHaveBeenCalled();
-    expect(interaction.followUp).toHaveBeenCalled();
-    expect(interaction.editReply).not.toHaveBeenCalled();
+    expect(interaction.editReply).toHaveBeenCalled();
+    expect(interaction.followUp).not.toHaveBeenCalled();
 
     errSpy.mockRestore();
     findSpy.mockRestore();

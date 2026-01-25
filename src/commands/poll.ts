@@ -260,45 +260,46 @@ export default class PollCommand extends Command {
           // ignore defer failure and fall back to replying later
         }
       }
+
+      const respond = async (content: string) => {
+        // If we've deferred, we must NOT call reply() (Discord.js will throw InteractionAlreadyReplied).
+        if (usedDefer && interaction.editReply) {
+          await interaction.editReply({ content }).catch(() => {});
+          return;
+        }
+
+        // If someone else already acknowledged the interaction (rare, but can happen in some mocked/test shapes),
+        // fall back to followUp.
+        if ((interaction.deferred || interaction.replied) && interaction.followUp) {
+          await interaction
+            .followUp({ content, ephemeral: true })
+            .catch(() => {});
+          return;
+        }
+
+        await interaction
+          .reply({ content, ephemeral: true })
+          .catch(() => {});
+      };
+
       const message = interaction.targetMessage;
       log(
         `reopen: messageId=${message?.id ?? "unknown"} guild=${interaction.guildId ?? "dm"} channel=${(interaction.channel as any)?.id ?? "unknown"}`,
       );
       const foundPoll = Polls.findByMessageId(message.id);
       if (!foundPoll) {
-        if (usedDefer && interaction.editReply) {
-          await interaction
-            .editReply({ content: "This message is not a poll." })
-            .catch(() => {});
-        } else {
-          await interaction.reply({
-            content: "This message is not a poll.",
-            ephemeral: true,
-          });
-        }
+        await respond("This message is not a poll.");
         return;
       }
       if (!foundPoll.closed) {
-        if (usedDefer && interaction.editReply) {
-          await interaction
-            .editReply({ content: "Poll is already open." })
-            .catch(() => {});
-        } else {
-          await interaction.reply({
-            content: "Poll is already open.",
-            ephemeral: true,
-          });
-        }
+        await respond("Poll is already open.");
         return;
       }
       const member = interaction.member;
       const isAdmin =
         member?.permissions?.has?.(PERMISSION_ADMINISTRATOR) === true;
       if (!isAdmin) {
-        await interaction.reply({
-          content: "Only an admin can reopen polls.",
-          ephemeral: true,
-        });
+        await respond("Only an admin can reopen polls.");
         return;
       }
 
@@ -331,36 +332,37 @@ export default class PollCommand extends Command {
         // ignore errors editing original message
       }
 
-      if (usedDefer && interaction.editReply) {
-        await interaction
-          .editReply({ content: `Poll ${foundPoll.id} has been reopened.` })
-          .catch(() => {});
-      } else {
-        await interaction.reply({
-          content: `Poll ${foundPoll.id} has been reopened.`,
-          ephemeral: true,
-        });
-      }
+      await respond(`Poll ${foundPoll.id} has been reopened.`);
     } catch (err: any) {
       console.error("Error handling Reopen poll context menu:", err);
       try {
-        if (interaction.editReply && (interaction.deferred || interaction.replied)) {
-          await interaction.followUp({
-            content: "An internal error occurred while reopening the poll.",
-            ephemeral: true,
-          });
-        } else if (interaction.editReply && interaction.deferred) {
+        if (interaction.editReply && interaction.deferred) {
+          // Deferred but not yet replied => editReply is the right completion.
           await interaction
             .editReply({
               content: "An internal error occurred while reopening the poll.",
             })
             .catch(() => {});
-        } else {
-          await interaction.reply({
+          return;
+        }
+
+        if (interaction.followUp && interaction.replied) {
+          // Already replied => follow-up is the only safe option.
+          await interaction
+            .followUp({
+              content: "An internal error occurred while reopening the poll.",
+              ephemeral: true,
+            })
+            .catch(() => {});
+          return;
+        }
+
+        await interaction
+          .reply({
             content: "An internal error occurred while reopening the poll.",
             ephemeral: true,
-          });
-        }
+          })
+          .catch(() => {});
       } catch (_) {
         // last resort: nothing we can do
       }
