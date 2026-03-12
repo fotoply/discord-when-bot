@@ -304,16 +304,32 @@ export function buildPollMessage(
   files?: any[];
   attachments?: any[];
 } {
+  const withAudienceMentions = <T extends { content?: string }>(message: T): T => {
+    const mentions =
+      Array.isArray(poll.roles) && poll.roles.length
+        ? poll.roles.map((roleId) => `<@&${roleId}>`).join(" ")
+        : "";
+    if (!mentions) return message;
+
+    return {
+      ...message,
+      content:
+        message.content && message.content.length
+          ? `${mentions}\n${message.content}`
+          : mentions,
+    };
+  };
+
   // Open grid view for open polls
   if (!poll.closed && poll.viewMode === "grid") {
     const { file } = buildGridImageEmbed(poll, extras);
-    return {
+    return withAudienceMentions({
       content: "",
       embeds: [],
       components: componentsFor(poll),
       files: file ? [file] : [],
       attachments: [],
-    };
+    });
   }
 
   // Helper to select full vs compact content
@@ -329,21 +345,21 @@ export function buildPollMessage(
   // Closed poll: show list content and attach grid image file only (no embed)
   if (poll.closed) {
     const { file } = buildGridImageEmbed(poll, extras);
-    return {
+    return withAudienceMentions({
       content,
       embeds: [],
       components: [],
       files: file ? [file] : [],
       attachments: [],
-    };
+    });
   }
 
   // Default list view for open polls
-  return {
+  return withAudienceMentions({
     content,
     embeds: [],
     components: componentsFor(poll),
     files: [],
     attachments: [],
-  };
+  });
 }

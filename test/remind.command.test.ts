@@ -110,6 +110,7 @@ describe("Remind command", () => {
     const replyArg = (interaction.reply.mock.calls[0]![0] as any)
       .content as string;
     expect(replyArg).toMatch(/Triggered reminders/);
+    expect(replyArg).toMatch(/channel/);
   });
 
   it("uses deferReply and editReply when available", async () => {

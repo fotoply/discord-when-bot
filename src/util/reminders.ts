@@ -101,8 +101,51 @@ function splitReminderMessages(
   return out.length ? out : [prefix.trimEnd()];
 }
 
+function valuesOf<T>(cache: any): T[] {
+  if (!cache) return [];
+  if (typeof cache.values === "function") return Array.from(cache.values());
+  if (cache.cache) return valuesOf<T>(cache.cache);
+  return Object.values(cache) as T[];
+}
+
+function canAccessChannel(channel: any, member: any): boolean {
+  if (!channel || !member || typeof channel.permissionsFor !== "function") {
+    return true;
+  }
+
+  try {
+    const perms = channel.permissionsFor(member);
+    if (!perms || typeof perms.has !== "function") return true;
+    return perms.has("ViewChannel") === true;
+  } catch {
+    return true;
+  }
+}
+
+async function waitForMembersFetch(
+  guild: any,
+  timeoutMs: number,
+): Promise<void> {
+  const fetchMembers = guild?.members?.fetch;
+  if (typeof fetchMembers !== "function") return;
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      Promise.resolve(fetchMembers.call(guild.members)).then(() => undefined),
+      new Promise<void>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error("Members didn't arrive in time."));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 // Compute non-responders for a poll within a guild (excludes bots and respects poll.roles if specified)
-export function computeNonResponders(poll: any, guild: any): string[] {
+export function computeNonResponders(poll: any, guild: any, channel?: any): string[] {
   // Build responded set from all selections (including NONE_SELECTION)
   const responded = new Set<string>();
   for (const set of poll.selections.values()) {
@@ -117,17 +160,14 @@ export function computeNonResponders(poll: any, guild: any): string[] {
 
   // Determine non-responders: all non-bot guild members not in responded (and in roles if set)
   const toPing: string[] = [];
-  const cache = guild?.members?.cache as Map<string, GuildMember> | any;
-  const iter =
-    cache?.values
-      ? cache.values()
-      : cache
-        ? Object.values(cache)
-        : ([] as any[]);
+  const channelMembers = valuesOf<GuildMember>(channel?.members as any);
+  const guildMembers = valuesOf<GuildMember>(guild?.members?.cache as any);
+  const members = channelMembers.length ? channelMembers : guildMembers;
 
-  for (const member of iter as Iterable<GuildMember>) {
+  for (const member of members) {
     const m: any = member as any;
     if (m?.user?.bot) continue;
+    if (!channelMembers.length && !canAccessChannel(channel, m)) continue;
     if (roleSet) {
       const rolesForMember = m?.roles?.cache
         ? Array.from(m.roles.cache.keys?.() ?? m.roles.cache.keys?.())
@@ -173,6 +213,16 @@ export async function sendReminders(
   options?: SendRemindersOptions,
 ) {
   const openPolls = Polls.allOpen();
+  const memberFetchCache = new Map<string, Promise<void>>();
+  const configCache = new Map<
+    string,
+    {
+      enabled: boolean;
+      intervalHours: number;
+      lastSent?: number;
+      startTime?: string;
+    }
+  >();
   log(
     `Scanning ${openPolls.length} open polls${options?.channelId ? ` (channelId=${options.channelId})` : ""}${options?.force ? " [force]" : ""}.`,
   );
@@ -205,7 +255,10 @@ export async function sendReminders(
       let lastSent: number | undefined = undefined;
       let startTime: string | undefined = undefined;
       if (guildId && chanId) {
-        const cfg = ReminderSettings.get(guildId, chanId);
+        const configKey = `${guildId}:${chanId}`;
+        const cfg =
+          configCache.get(configKey) ?? ReminderSettings.get(guildId, chanId);
+        configCache.set(configKey, cfg);
         enabled = cfg.enabled;
         intervalHours = cfg.intervalHours;
         lastSent = cfg.lastSent;
@@ -246,13 +299,27 @@ export async function sendReminders(
       }
 
       // Ensure members cache is populated
-      try {
-        await guild.members.fetch?.();
-      } catch (e) {
-        log(`members.fetch failed:`, (e as any)?.message ?? e);
+      if (guildId) {
+        const existingFetch = memberFetchCache.get(guildId);
+        if (existingFetch) {
+          await existingFetch;
+        } else {
+          const timeoutMs = options?.force ? 1500 : 5000;
+          const fetchPromise = waitForMembersFetch(guild, timeoutMs).catch((e) => {
+            log(`members.fetch failed:`, (e as any)?.message ?? e);
+          });
+          memberFetchCache.set(guildId, fetchPromise);
+          await fetchPromise;
+        }
+      } else {
+        try {
+          await waitForMembersFetch(guild, options?.force ? 1500 : 5000);
+        } catch (e) {
+          log(`members.fetch failed:`, (e as any)?.message ?? e);
+        }
       }
 
-      const toPing = computeNonResponders(poll, guild);
+      const toPing = computeNonResponders(poll, guild, channel);
       log(`poll ${poll.id}: toPing=${toPing.length}`);
 
       // If there's an old reminder, try to delete it regardless

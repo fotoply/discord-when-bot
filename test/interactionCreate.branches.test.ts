@@ -244,6 +244,34 @@ describe("InteractionCreate additional branches", () => {
     expect(arg.content).toMatch(/Cannot determine a text channel/);
   });
 
+  it("handleLastSelect reports channel access errors and rolls back the poll", async () => {
+    Sessions.setFirst("u-no-access", "2025-08-30");
+    const reply = vi.fn().mockResolvedValue(undefined);
+    const before = Polls.allOpen().length;
+    const ix: any = {
+      isStringSelectMenu: () => true,
+      customId: "when:last",
+      values: ["2025-08-31"],
+      user: { id: "u-no-access" },
+      inGuild: () => true,
+      channel: {
+        id: "chan-no-access",
+        isTextBased: () => true,
+        send: vi.fn().mockRejectedValue(new Error("Missing Access")),
+      },
+      update: vi.fn().mockResolvedValue(undefined),
+      reply,
+    };
+
+    await listener.run(ix);
+
+    expect(reply).toHaveBeenCalled();
+    expect(reply.mock.calls[0]![0].content).toMatch(/couldn't post the poll/i);
+    expect(ix.update).not.toHaveBeenCalled();
+    expect(Polls.allOpen().length).toBe(before);
+    expect(Polls.allOpen().find((p) => p.channelId === "chan-no-access")).toBeUndefined();
+  });
+
   it("toggle replies Poll not found when poll id unknown (consolidated)", async () => {
     const reply = vi.fn().mockResolvedValue(undefined);
     const ix: any = {

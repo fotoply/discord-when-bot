@@ -267,6 +267,11 @@ class PollStore {
     }
   }
 
+  delete(pollId: string) {
+    this.polls.delete(pollId);
+    db.prepare("DELETE FROM polls WHERE id = ?").run(pollId);
+  }
+
   reopen(pollId: string) {
     const poll = this.polls.get(pollId) ?? this.hydrate(pollId);
     if (poll) {
@@ -358,3 +363,4 @@ class PollStore {
 }
 
 export const Polls = new PollStore();
+

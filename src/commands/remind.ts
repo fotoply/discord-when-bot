@@ -132,9 +132,8 @@ export default class RemindCommand extends Command {
       }
 
       log(`now: guild=${guildId} channel=${channelId} force=true`);
-      // Fire-and-forget; force bypasses interval throttle for explicit admin-triggered reminders
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      sendReminders(this.container.client as any, Polls, {
+      // Run reminders now; force bypasses interval throttle for explicit admin-triggered reminders.
+      await sendReminders(this.container.client as any, Polls, {
         channelId,
         force: true,
       }).catch(() => {});

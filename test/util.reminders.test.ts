@@ -11,6 +11,17 @@ function makeSelections(respondedIds: string[] = [], includeNone = true) {
   return map;
 }
 
+function clearReminderConfig(guildId: string, channelId: string) {
+  for (const key of [
+    "reminders.enabled",
+    "reminders.intervalHours",
+    "reminders.lastSent",
+    "reminders.startTime",
+  ]) {
+    ChannelConfig.delete(guildId, channelId, key);
+  }
+}
+
 describe("util/reminders", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -246,6 +257,298 @@ describe("util/reminders", () => {
     // Persist new reminder ids per poll
     expect(setReminderMessageId).toHaveBeenCalledWith("pa", "new-a");
     expect(setReminderMessageId).toHaveBeenCalledWith("pb", "new-b");
+  });
+
+  it("scopes reminder recipients to each poll channel and still sends in both channels", async () => {
+    clearReminderConfig("g-shared", "ca-scope");
+    clearReminderConfig("g-shared", "cb-scope");
+
+    const guild = {
+      id: "g-shared",
+      members: {
+        cache: new Map<string, any>([
+          ["u1", { id: "u1", user: { bot: false } }],
+          ["u2", { id: "u2", user: { bot: false } }],
+          ["u3", { id: "u3", user: { bot: false } }],
+        ]),
+        fetch: vi.fn(),
+      },
+    } as any;
+
+    const pollA = {
+      id: "pa-scope",
+      channelId: "ca-scope",
+      messageId: "poll-msg-a-scope",
+      selections: makeSelections(["u1"]),
+    };
+    const pollB = {
+      id: "pb-scope",
+      channelId: "cb-scope",
+      messageId: "poll-msg-b-scope",
+      selections: makeSelections(["u1"]),
+    };
+    const setReminderMessageId = vi.fn();
+    const Polls = {
+      allOpen: vi.fn(() => [pollA, pollB]),
+      setReminderMessageId,
+    } as any;
+
+    const sendA = vi.fn(() => Promise.resolve({ id: "new-a-scope" }));
+    const sendB = vi.fn(() => Promise.resolve({ id: "new-b-scope" }));
+    const chanA = {
+      id: "ca-scope",
+      guild,
+      members: new Map<string, any>([
+        ["u1", { id: "u1", user: { bot: false } }],
+        ["u2", { id: "u2", user: { bot: false } }],
+      ]),
+      send: sendA,
+      messages: { delete: vi.fn() },
+    } as any;
+    const chanB = {
+      id: "cb-scope",
+      guild,
+      members: new Map<string, any>([
+        ["u1", { id: "u1", user: { bot: false } }],
+        ["u3", { id: "u3", user: { bot: false } }],
+      ]),
+      send: sendB,
+      messages: { delete: vi.fn() },
+    } as any;
+    const client = {
+      channels: {
+        fetch: vi.fn((id: string) => {
+          if (id === "ca-scope") return Promise.resolve(chanA);
+          if (id === "cb-scope") return Promise.resolve(chanB);
+          return Promise.resolve(null);
+        }),
+      },
+    } as any;
+
+    await sendReminders(client, Polls);
+
+    expect(sendA).toHaveBeenCalledTimes(1);
+    expect(sendB).toHaveBeenCalledTimes(1);
+
+    const callsA = sendA.mock.calls as unknown as any[][];
+    const callsB = sendB.mock.calls as unknown as any[][];
+    const contentA = (callsA[0]![0] as any).content as string;
+    const contentB = (callsB[0]![0] as any).content as string;
+    expect(contentA).toContain("<@u2>");
+    expect(contentA).not.toContain("<@u3>");
+    expect(contentB).toContain("<@u3>");
+    expect(contentB).not.toContain("<@u2>");
+    expect(setReminderMessageId).toHaveBeenCalledWith("pa-scope", "new-a-scope");
+    expect(setReminderMessageId).toHaveBeenCalledWith("pb-scope", "new-b-scope");
+  });
+
+  it("does not let one poll throttle later polls in the same channel during the same run", async () => {
+    const guildId = "g-same-run";
+    const channelId = "c-same-run";
+    clearReminderConfig(guildId, channelId);
+
+    const pollA = {
+      id: "pa-same-run",
+      channelId,
+      messageId: "poll-msg-a-same-run",
+      selections: makeSelections(["u1"]),
+    };
+    const pollB = {
+      id: "pb-same-run",
+      channelId,
+      messageId: "poll-msg-b-same-run",
+      selections: makeSelections(["u1"]),
+    };
+    const setReminderMessageId = vi.fn();
+    const Polls = {
+      allOpen: vi.fn(() => [pollA, pollB]),
+      setReminderMessageId,
+    } as any;
+
+    const sendMock = vi
+      .fn()
+      .mockResolvedValueOnce({ id: "new-a-same-run" })
+      .mockResolvedValueOnce({ id: "new-b-same-run" });
+    const channel = {
+      id: channelId,
+      guild: {
+        id: guildId,
+        members: {
+          cache: new Map<string, any>([
+            ["u1", { id: "u1", user: { bot: false } }],
+            ["u2", { id: "u2", user: { bot: false } }],
+          ]),
+          fetch: vi.fn(),
+        },
+      },
+      send: sendMock,
+      messages: { delete: vi.fn() },
+    } as any;
+    const client = {
+      channels: { fetch: vi.fn(() => Promise.resolve(channel)) },
+    } as any;
+
+    await sendReminders(client, Polls);
+
+    expect(sendMock).toHaveBeenCalledTimes(2);
+    expect(setReminderMessageId).toHaveBeenCalledWith("pa-same-run", "new-a-same-run");
+    expect(setReminderMessageId).toHaveBeenCalledWith("pb-same-run", "new-b-same-run");
+  });
+
+  it("sends a reminder for each open poll when forced for a single channel", async () => {
+    const guildId = "g-channel-force";
+    const channelId = "c-channel-force";
+    clearReminderConfig(guildId, channelId);
+
+    const pollA = {
+      id: "pa-channel-force",
+      channelId,
+      messageId: "poll-msg-a-channel-force",
+      selections: makeSelections(["u1"]),
+    };
+    const pollB = {
+      id: "pb-channel-force",
+      channelId,
+      messageId: "poll-msg-b-channel-force",
+      selections: makeSelections(["u1"]),
+    };
+    const pollOther = {
+      id: "pc-other-channel",
+      channelId: "c-other-channel",
+      messageId: "poll-msg-other-channel",
+      selections: makeSelections(["u9"]),
+    };
+    const setReminderMessageId = vi.fn();
+    const Polls = {
+      allOpen: vi.fn(() => [pollA, pollB, pollOther]),
+      setReminderMessageId,
+    } as any;
+
+    const sendTarget = vi
+      .fn()
+      .mockResolvedValueOnce({ id: "new-a-channel-force" })
+      .mockResolvedValueOnce({ id: "new-b-channel-force" });
+    const sendOther = vi.fn(() => Promise.resolve({ id: "new-other-channel" }));
+    const targetChannel = {
+      id: channelId,
+      guild: {
+        id: guildId,
+        members: {
+          cache: new Map<string, any>([
+            ["u1", { id: "u1", user: { bot: false } }],
+            ["u2", { id: "u2", user: { bot: false } }],
+          ]),
+          fetch: vi.fn(),
+        },
+      },
+      send: sendTarget,
+      messages: { delete: vi.fn() },
+    } as any;
+    const otherChannel = {
+      id: "c-other-channel",
+      guild: {
+        id: "g-other-channel",
+        members: {
+          cache: new Map<string, any>([
+            ["u9", { id: "u9", user: { bot: false } }],
+            ["u10", { id: "u10", user: { bot: false } }],
+          ]),
+          fetch: vi.fn(),
+        },
+      },
+      send: sendOther,
+      messages: { delete: vi.fn() },
+    } as any;
+    const client = {
+      channels: {
+        fetch: vi.fn((id: string) => {
+          if (id === channelId) return Promise.resolve(targetChannel);
+          if (id === "c-other-channel") return Promise.resolve(otherChannel);
+          return Promise.resolve(null);
+        }),
+      },
+    } as any;
+
+    await sendReminders(client, Polls, { channelId, force: true });
+
+    expect(sendTarget).toHaveBeenCalledTimes(2);
+    expect(sendOther).not.toHaveBeenCalled();
+    expect(setReminderMessageId).toHaveBeenCalledWith(
+      "pa-channel-force",
+      "new-a-channel-force",
+    );
+    expect(setReminderMessageId).toHaveBeenCalledWith(
+      "pb-channel-force",
+      "new-b-channel-force",
+    );
+  });
+
+  it("only waits for members.fetch once per guild when forced reminders hit multiple polls in one channel", async () => {
+    vi.useFakeTimers();
+    const guildId = "g-channel-timeout";
+    const channelId = "c-channel-timeout";
+    clearReminderConfig(guildId, channelId);
+
+    const pollA = {
+      id: "pa-channel-timeout",
+      channelId,
+      messageId: "poll-msg-a-channel-timeout",
+      selections: makeSelections(["u1"]),
+    };
+    const pollB = {
+      id: "pb-channel-timeout",
+      channelId,
+      messageId: "poll-msg-b-channel-timeout",
+      selections: makeSelections(["u1"]),
+    };
+    const setReminderMessageId = vi.fn();
+    const Polls = {
+      allOpen: vi.fn(() => [pollA, pollB]),
+      setReminderMessageId,
+    } as any;
+
+    const fetchMock = vi.fn(() => new Promise(() => {}));
+    const sendMock = vi
+      .fn()
+      .mockResolvedValueOnce({ id: "new-a-channel-timeout" })
+      .mockResolvedValueOnce({ id: "new-b-channel-timeout" });
+    const channel = {
+      id: channelId,
+      guild: {
+        id: guildId,
+        members: {
+          cache: new Map<string, any>([
+            ["u1", { id: "u1", user: { bot: false } }],
+            ["u2", { id: "u2", user: { bot: false } }],
+          ]),
+          fetch: fetchMock,
+        },
+      },
+      send: sendMock,
+      messages: { delete: vi.fn() },
+    } as any;
+    const client = {
+      channels: { fetch: vi.fn(() => Promise.resolve(channel)) },
+    } as any;
+
+    try {
+      const run = sendReminders(client, Polls, { channelId, force: true });
+      await vi.advanceTimersByTimeAsync(1500);
+      await run;
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(sendMock).toHaveBeenCalledTimes(2);
+      expect(setReminderMessageId).toHaveBeenCalledWith(
+        "pa-channel-timeout",
+        "new-a-channel-timeout",
+      );
+      expect(setReminderMessageId).toHaveBeenCalledWith(
+        "pb-channel-timeout",
+        "new-b-channel-timeout",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("works when guild.members.fetch is undefined (no-op) and still sends", async () => {

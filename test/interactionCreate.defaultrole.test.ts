@@ -32,10 +32,18 @@ describe("Default role per channel", () => {
     expect(posted.content).toContain("<@&role-xyz>");
 
     // There should be an open poll in this channel with roles set
-    const open = Polls.allOpen();
+    const open = [...Polls.allOpen()].reverse();
     const found = open.find((p) => p.channelId === channelId);
     expect(found).toBeDefined();
     expect(found!.roles).toEqual(["role-xyz"]);
+
+    const vote = await fw.emitButton(
+      `when:toggle:${found!.id}:${first}`,
+      "voter-role",
+    );
+    expect(vote.update).toHaveBeenCalled();
+    const updatedPayload = vote.update.mock.calls[0]![0] as any;
+    expect(updatedPayload.content).toContain("<@&role-xyz>");
   });
 
   it("when no default role is set, behaves like before (no role mention)", async () => {
@@ -57,7 +65,7 @@ describe("Default role per channel", () => {
     expect(posted.content).not.toMatch(/<@&/);
 
     // The open poll in this channel should have undefined roles
-    const open = Polls.allOpen();
+    const open = [...Polls.allOpen()].reverse();
     const found = open.find((p) => p.channelId === channelId);
     expect(found).toBeDefined();
     expect(found!.roles).toBeUndefined();

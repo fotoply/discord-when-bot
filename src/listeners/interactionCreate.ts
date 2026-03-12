@@ -125,6 +125,21 @@ export default class InteractionCreateListener extends Listener<
     }
   }
 
+  private async replyPollPostError(interaction: any) {
+    const payload = {
+      content:
+        "I couldn't post the poll in that channel. Please check that I can view the channel and send messages there, then try again.",
+      ephemeral: true,
+    };
+
+    if (interaction.deferred || interaction.replied) {
+      await interaction.followUp?.(payload).catch(() => {});
+      return;
+    }
+
+    await interaction.reply?.(payload).catch(() => {});
+  }
+
   private async handleDateRangeModal(interaction: any) {
     const firstRaw = interaction.fields.getTextInputValue("first-date")?.trim();
     const lastRaw = interaction.fields.getTextInputValue("last-date")?.trim();
@@ -199,19 +214,14 @@ export default class InteractionCreateListener extends Listener<
     );
     const message = buildPollMessage(poll, extras);
 
-    // Prepend role mentions if any
-    const mentions =
-      Array.isArray(poll.roles) && poll.roles.length
-        ? poll.roles.map((r) => `<@&${r}>`).join(" ")
-        : "";
-    const merged = { ...message } as any;
-    if (mentions) {
-      if (merged.content && merged.content.length)
-        merged.content = `${mentions}\n${merged.content}`;
-      else merged.content = mentions;
+    try {
+      await interaction.reply(message);
+    } catch (error: any) {
+      Polls.delete(poll.id);
+      log("modal: failed to post poll", poll.id, error?.message ?? error);
+      await this.replyPollPostError(interaction);
+      return;
     }
-
-    await interaction.reply(merged);
 
     const replyMsg = await interaction.fetchReply();
     Polls.setMessageId(poll.id, replyMsg.id);
@@ -395,18 +405,15 @@ export default class InteractionCreateListener extends Listener<
     );
     const messageOpts = buildPollMessage(poll, extras);
 
-    // Prepend role mentions if any
-    const mentions =
-      Array.isArray(poll.roles) && poll.roles.length
-        ? poll.roles.map((r) => `<@&${r}>`).join(" ")
-        : "";
-    if (mentions) {
-      if (messageOpts.content && messageOpts.content.length)
-        messageOpts.content = `${mentions}\n${messageOpts.content}`;
-      else messageOpts.content = mentions;
+    let message: any;
+    try {
+      message = await interaction.channel!.send(messageOpts as any);
+    } catch (error: any) {
+      Polls.delete(poll.id);
+      log("last-select: failed to post poll", poll.id, error?.message ?? error);
+      await this.replyPollPostError(interaction);
+      return;
     }
-
-    const message = await interaction.channel!.send(messageOpts as any);
     log("last-select: posted message", (message as any)?.id ?? "unknown", "for poll", poll.id);
 
     Polls.setMessageId(poll.id, (message as any).id);
