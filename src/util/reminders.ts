@@ -238,10 +238,10 @@ function canAccessChannel(channel: any, member: any): boolean {
 
   try {
     const perms = channel.permissionsFor(member);
-    if (!perms || typeof perms.has !== "function") return true;
+    if (!perms || typeof perms.has !== "function") return false;
     return perms.has("ViewChannel") === true;
   } catch {
-    return true;
+    return false;
   }
 }
 

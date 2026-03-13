@@ -147,7 +147,9 @@ export default class PollCommand extends Command {
               .fetch(poll.messageId)
               .catch(() => null);
             if (oldMsg) {
-              await oldMsg.delete().catch(() => {});
+              await oldMsg.delete().catch((err: unknown) => {
+                log(`repost: failed to delete old message ${poll.messageId}`, err);
+              });
               log(`repost: deleted old message ${poll.messageId}`);
             }
           }
@@ -264,7 +266,9 @@ export default class PollCommand extends Command {
       const respond = async (content: string) => {
         // If we've deferred, we must NOT call reply() (Discord.js will throw InteractionAlreadyReplied).
         if (usedDefer && interaction.editReply) {
-          await interaction.editReply({ content }).catch(() => {});
+          await interaction.editReply({ content }).catch((err: unknown) => {
+            log("reopen: editReply failed", err);
+          });
           return;
         }
 
@@ -273,13 +277,17 @@ export default class PollCommand extends Command {
         if ((interaction.deferred || interaction.replied) && interaction.followUp) {
           await interaction
             .followUp({ content, ephemeral: true })
-            .catch(() => {});
+            .catch((err: unknown) => {
+              log("reopen: followUp failed", err);
+            });
           return;
         }
 
         await interaction
           .reply({ content, ephemeral: true })
-          .catch(() => {});
+          .catch((err: unknown) => {
+            log("reopen: reply failed", err);
+          });
       };
 
       const message = interaction.targetMessage;
@@ -323,7 +331,9 @@ export default class PollCommand extends Command {
               .catch(() => null);
             if (oldMsg) {
               const msgOpts = buildPollMessage(foundPoll);
-              await oldMsg.edit(msgOpts as any).catch(() => {});
+              await oldMsg.edit(msgOpts as any).catch((err: unknown) => {
+                log("reopen: failed to edit original message", err);
+              });
               log(`reopen: edited original message ${foundPoll.messageId}`);
             }
           }
@@ -342,7 +352,9 @@ export default class PollCommand extends Command {
             .editReply({
               content: "An internal error occurred while reopening the poll.",
             })
-            .catch(() => {});
+            .catch((replyErr: unknown) => {
+              log("reopen: failed to send deferred error", replyErr);
+            });
           return;
         }
 
@@ -353,7 +365,9 @@ export default class PollCommand extends Command {
               content: "An internal error occurred while reopening the poll.",
               ephemeral: true,
             })
-            .catch(() => {});
+            .catch((replyErr: unknown) => {
+              log("reopen: failed to send follow-up error", replyErr);
+            });
           return;
         }
 
@@ -362,7 +376,9 @@ export default class PollCommand extends Command {
             content: "An internal error occurred while reopening the poll.",
             ephemeral: true,
           })
-          .catch(() => {});
+          .catch((replyErr: unknown) => {
+            log("reopen: failed to send reply error", replyErr);
+          });
       } catch (_) {
         // last resort: nothing we can do
       }

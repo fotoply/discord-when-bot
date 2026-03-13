@@ -42,22 +42,26 @@ export function gridExtrasContextFrom(interaction: Interaction): GridExtrasConte
 function isModalSubmitInteraction(
   i: Interaction,
 ): i is import("discord.js").ModalSubmitInteraction {
-  return (
-    typeof (i as any).isModalSubmit === "function" && (i as any).isModalSubmit()
-  );
+  return (i as any).isModalSubmit?.() === true;
 }
 
 function isButtonInteraction(i: Interaction): i is ButtonInteraction {
-  return typeof (i as any).isButton === "function" && (i as any).isButton();
+  return (i as any).isButton?.() === true;
 }
 
 function isStringSelectInteraction(
   i: Interaction,
 ): i is StringSelectMenuInteraction {
-  return (
-    typeof (i as any).isStringSelectMenu === "function" &&
-    (i as any).isStringSelectMenu()
-  );
+  return (i as any).isStringSelectMenu?.() === true;
+}
+
+function getFirstDatePage(all: string[], start: number) {
+  const hasPrev = start > 0;
+  const hasNextEst = start + (25 - (hasPrev ? 1 : 0) - 1) < all.length;
+  const pageSize = 25 - (hasPrev ? 1 : 0) - (hasNextEst ? 1 : 0);
+  const page = all.slice(start, start + pageSize);
+  const hasNext = start + page.length < all.length;
+  return { page, pageSize, hasPrev, hasNext };
 }
 
 export default class InteractionCreateListener extends Listener<
@@ -133,11 +137,15 @@ export default class InteractionCreateListener extends Listener<
     };
 
     if (interaction.deferred || interaction.replied) {
-      await interaction.followUp?.(payload).catch(() => {});
+      await interaction.followUp?.(payload).catch((error: unknown) => {
+        log("replyPollPostError: followUp failed", error);
+      });
       return;
     }
 
-    await interaction.reply?.(payload).catch(() => {});
+    await interaction.reply?.(payload).catch((error: unknown) => {
+      log("replyPollPostError: reply failed", error);
+    });
   }
 
   private async handleDateRangeModal(interaction: any) {
@@ -229,7 +237,9 @@ export default class InteractionCreateListener extends Listener<
 
     await interaction
       .followUp({ content: "Poll created!", ephemeral: true })
-      .catch(() => {});
+      .catch((error: unknown) => {
+        log("modal: follow-up failed", error);
+      });
   }
 
   private async handleFirstSelect(interaction: StringSelectMenuInteraction) {
@@ -241,22 +251,15 @@ export default class InteractionCreateListener extends Listener<
       const all = buildFutureDates(90);
       const current = Sessions.getPageStart(interaction.user.id);
 
-      // Compute nextStart and pageSize so dates + nav <= 25 consistently
-      const tempStart = selected === NAV.FIRST_NEXT
-        ? Math.min(current + 1, Math.max(0, all.length - 1))
-        : Math.max(0, current - 1);
-      const hasPrevEst = tempStart > 0;
-      const nextAssume = tempStart + (25 - (hasPrevEst ? 1 : 0) - 1) < all.length;
-      const pageSize = 25 - (hasPrevEst ? 1 : 0) - (nextAssume ? 1 : 0);
+      // Compute nextStart and page size so dates + nav stays <= 25
+      const { pageSize } = getFirstDatePage(all, current);
       const nextStart = selected === NAV.FIRST_NEXT
         ? Math.min(current + pageSize, Math.max(0, all.length - pageSize))
         : Math.max(0, current - pageSize);
 
       Sessions.setPageStart(interaction.user.id, nextStart);
 
-      const page = all.slice(nextStart, nextStart + pageSize);
-      const hasPrev = nextStart > 0;
-      const hasNext = nextStart + page.length < all.length;
+      const { page, hasPrev, hasNext } = getFirstDatePage(all, nextStart);
 
       const firstSelect = new StringSelectMenuBuilder()
         .setCustomId(CUSTOM_ID.FIRST)
@@ -293,12 +296,7 @@ export default class InteractionCreateListener extends Listener<
     // Build first menu using current page (keep nav <= 25)
     const all = buildFutureDates(90);
     const start = Sessions.getPageStart(interaction.user.id);
-    const hasPrevEst = start > 0;
-    const nextAssume = start + (25 - (hasPrevEst ? 1 : 0) - 1) < all.length;
-    const pageSize = 25 - (hasPrevEst ? 1 : 0) - (nextAssume ? 1 : 0);
-    const page = all.slice(start, start + pageSize);
-    const hasPrev = start > 0;
-    const hasNext = start + page.length < all.length;
+    const { page, hasPrev, hasNext } = getFirstDatePage(all, start);
 
     const firstSelect = new StringSelectMenuBuilder()
       .setCustomId(CUSTOM_ID.FIRST)
@@ -361,7 +359,7 @@ export default class InteractionCreateListener extends Listener<
     }
 
     const dates = buildDateRange(first, last);
-    if (!dates || dates.length === 0) {
+    if (!dates) {
       log("last-select: invalid range after build");
       await interaction.reply({ content: "Invalid range.", ephemeral: true });
       return;

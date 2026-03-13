@@ -128,15 +128,29 @@ export default class RemindCommand extends Command {
         try {
           await interaction.deferReply({ ephemeral: true });
           deferred = true;
-        } catch {}
+        } catch (err) {
+          log("now: deferReply failed", err);
+        }
       }
 
       log(`now: guild=${guildId} channel=${channelId} force=true`);
       // Run reminders now; force bypasses interval throttle for explicit admin-triggered reminders.
-      await sendReminders(this.container.client as any, Polls, {
-        channelId,
-        force: true,
-      }).catch(() => {});
+      try {
+        await sendReminders(this.container.client as any, Polls, {
+          channelId,
+          force: true,
+        });
+      } catch (err) {
+        log("now: sendReminders failed", err);
+        const content =
+          "Failed to trigger reminders for this channel. Please try again.";
+        if (deferred) {
+          await interaction.editReply({ content });
+        } else {
+          await interaction.reply({ content, ephemeral: true });
+        }
+        return;
+      }
 
       if (deferred) {
         await interaction.editReply({
@@ -158,20 +172,11 @@ export default class RemindCommand extends Command {
       const startTime =
         interaction.options.getString("start_time") ?? undefined;
 
-      // If show or no options, just display current
-      if (!enabledChoice && intervalHours === undefined && !startTime) {
-        const current = ReminderSettings.get(guildId, channelId);
-        log(
-          `config show: guild=${guildId} channel=${channelId} enabled=${current.enabled} interval=${current.intervalHours}h start=${current.startTime ?? "unset"}`,
-        );
-        await interaction.reply({
-          content: `Current reminder settings for this channel:\n- enabled: ${current.enabled}\n- intervalHours: ${current.intervalHours}${current.startTime ? `\n- startTime: ${current.startTime} (UTC)` : ""}${current.lastSent ? `\n- lastSent: ${new Date(current.lastSent).toISOString()}` : ""}`,
-          ephemeral: true,
-        });
-        return;
-      }
-
-      if (enabledChoice === "show" || startTime === "show") {
+      const shouldShowReminderConfig =
+        enabledChoice === "show" ||
+        startTime === "show" ||
+        (!enabledChoice && intervalHours === undefined && !startTime);
+      if (shouldShowReminderConfig) {
         const current = ReminderSettings.get(guildId, channelId);
         log(
           `config show: guild=${guildId} channel=${channelId} enabled=${current.enabled} interval=${current.intervalHours}h start=${current.startTime ?? "unset"}`,
@@ -234,17 +239,7 @@ export default class RemindCommand extends Command {
       const enabledChoice = interaction.options.getString("enabled");
       const delayStr = interaction.options.getString("delay") ?? undefined;
 
-      if (!enabledChoice && delayStr === undefined) {
-        const current = ReadyNotifySettings.get(guildId, channelId);
-        const mins = Math.round(current.delayMs / 60000);
-        await interaction.reply({
-          content: `Current ready settings for this channel:\n- enabled: ${current.enabled}\n- delay: ${mins} minute(s)`,
-          ephemeral: true,
-        });
-        return;
-      }
-
-      if (enabledChoice === "show") {
+      if (enabledChoice === "show" || (!enabledChoice && delayStr === undefined)) {
         const current = ReadyNotifySettings.get(guildId, channelId);
         const mins = Math.round(current.delayMs / 60000);
         await interaction.reply({
