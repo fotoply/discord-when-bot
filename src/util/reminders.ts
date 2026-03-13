@@ -17,6 +17,129 @@ export type SendRemindersOptions = {
   force?: boolean; // if true, bypass interval throttle
 };
 
+type PreparedPoll = {
+  poll: any;
+  channel: any;
+  guild: any;
+  guildId?: string;
+  chanId?: string;
+};
+
+type FetchQueueJob<T> = {
+  run: () => Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
+  jitterMaxMs: number;
+};
+
+const IS_TEST_ENV = process.env.NODE_ENV === "test";
+const DEFAULT_FETCH_JITTER_MAX_MS = IS_TEST_ENV ? 0 : 600;
+const DEFAULT_FETCH_STAGGER_MAX_MS = IS_TEST_ENV ? 0 : 2000;
+const DEFAULT_FETCH_CONCURRENCY = 1;
+
+const fetchQueue: {
+  active: number;
+  pending: FetchQueueJob<any>[];
+} = {
+  active: 0,
+  pending: [],
+};
+
+function getPositiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(0, Math.floor(parsed));
+}
+
+function getFetchQueueConcurrency(): number {
+  return Math.max(
+    1,
+    getPositiveIntEnv("WHEN_MEMBER_FETCH_QUEUE_CONCURRENCY", DEFAULT_FETCH_CONCURRENCY),
+  );
+}
+
+function getFetchJitterMaxMs(): number {
+  return getPositiveIntEnv(
+    "WHEN_MEMBER_FETCH_JITTER_MAX_MS",
+    DEFAULT_FETCH_JITTER_MAX_MS,
+  );
+}
+
+function getFetchStartStaggerMaxMs(): number {
+  return getPositiveIntEnv(
+    "WHEN_MEMBER_FETCH_STAGGER_MAX_MS",
+    DEFAULT_FETCH_STAGGER_MAX_MS,
+  );
+}
+
+function sleep(ms: number): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function randomIntInclusive(max: number): number {
+  if (max <= 0) return 0;
+  return Math.floor(Math.random() * (max + 1));
+}
+
+function hashString(input: string): number {
+  let h = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    h = (h * 31 + input.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+function computeGuildStartStaggerMs(guildId: string | undefined): number {
+  if (!guildId) return 0;
+  const maxMs = getFetchStartStaggerMaxMs();
+  if (maxMs <= 0) return 0;
+  return hashString(guildId) % (maxMs + 1);
+}
+
+function shuffleInPlace<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = arr[i]!;
+    arr[i] = arr[j]!;
+    arr[j] = tmp;
+  }
+  return arr;
+}
+
+function drainFetchQueue() {
+  const concurrency = getFetchQueueConcurrency();
+  while (fetchQueue.active < concurrency && fetchQueue.pending.length > 0) {
+    const job = fetchQueue.pending.shift()!;
+    fetchQueue.active += 1;
+    void (async () => {
+      try {
+        const jitterDelay = randomIntInclusive(job.jitterMaxMs);
+        if (jitterDelay > 0) await sleep(jitterDelay);
+        const result = await job.run();
+        job.resolve(result);
+      } catch (e) {
+        job.reject(e);
+      } finally {
+        fetchQueue.active -= 1;
+        drainFetchQueue();
+      }
+    })();
+  }
+}
+
+function enqueueMemberFetch<T>(
+  run: () => Promise<T>,
+  jitterMaxMs: number,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    fetchQueue.pending.push({ run, resolve, reject, jitterMaxMs });
+    drainFetchQueue();
+  });
+}
+
 function parseStart(
   hhmm: string | undefined,
 ): { h: number; m: number } | undefined {
@@ -122,6 +245,17 @@ function canAccessChannel(channel: any, member: any): boolean {
   }
 }
 
+function getMemberRoleIds(member: any): string[] {
+  if (Array.isArray(member?.roles)) {
+    return member.roles.map((roleId: unknown) => String(roleId));
+  }
+
+  const roleCache = member?.roles?.cache;
+  if (!roleCache) return [];
+
+  return Array.from(roleCache.keys(), (roleId: unknown) => String(roleId));
+}
+
 async function waitForMembersFetch(
   guild: any,
   timeoutMs: number,
@@ -142,6 +276,27 @@ async function waitForMembersFetch(
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+async function fetchMembersWithQueue(
+  guild: any,
+  guildId: string | undefined,
+  timeoutMs: number,
+): Promise<void> {
+  const startStaggerMs = computeGuildStartStaggerMs(guildId);
+  const jitterMaxMs = getFetchJitterMaxMs();
+
+  return enqueueMemberFetch(async () => {
+    if (startStaggerMs > 0) await sleep(startStaggerMs);
+    try {
+      await waitForMembersFetch(guild, timeoutMs);
+    } catch (e) {
+      log(
+        `members.fetch failed${guildId ? ` for guild ${guildId}` : ""}; using cached members only:`,
+        (e as any)?.message ?? e,
+      );
+    }
+  }, jitterMaxMs);
 }
 
 // Compute non-responders for a poll within a guild (excludes bots and respects poll.roles if specified)
@@ -169,35 +324,13 @@ export function computeNonResponders(poll: any, guild: any, channel?: any): stri
     if (m?.user?.bot) continue;
     if (!channelMembers.length && !canAccessChannel(channel, m)) continue;
     if (roleSet) {
-      const rolesForMember = m?.roles?.cache
-        ? Array.from(m.roles.cache.keys?.() ?? m.roles.cache.keys?.())
-        : Array.isArray(m?.roles)
-          ? m.roles
-          : undefined;
+      const roleIds = getMemberRoleIds(m);
       let hasRole = false;
-      if (Array.isArray(rolesForMember)) {
-        for (const r of rolesForMember) {
-          if (roleSet.has(String(r))) {
-            hasRole = true;
-            break;
-          }
+      for (const roleId of roleIds) {
+        if (roleSet.has(roleId)) {
+          hasRole = true;
+          break;
         }
-      } else if (
-        m?.roles &&
-        typeof m.roles === "object" &&
-        typeof m.roles.cache === "object"
-      ) {
-        for (const [rid] of (m.roles.cache as Map<string, any>).entries?.() ??
-          []) {
-          if (roleSet.has(String(rid))) {
-            hasRole = true;
-            break;
-          }
-        }
-      } else if (m?.roles?.cache?.forEach) {
-        m.roles.cache.forEach((_v: any, k: string) => {
-          if (roleSet.has(String(k))) hasRole = true;
-        });
       }
       if (!hasRole) continue;
     }
@@ -223,6 +356,7 @@ export async function sendReminders(
       startTime?: string;
     }
   >();
+  const prepared: PreparedPoll[] = [];
   log(
     `Scanning ${openPolls.length} open polls${options?.channelId ? ` (channelId=${options.channelId})` : ""}${options?.force ? " [force]" : ""}.`,
   );
@@ -298,25 +432,38 @@ export async function sendReminders(
         log(`force sending reminders for poll ${poll.id}`);
       }
 
-      // Ensure members cache is populated
+      prepared.push({
+        poll,
+        channel,
+        guild,
+        guildId,
+        chanId,
+      });
+    } catch (err) {
+      // Ignore errors per poll to avoid blocking others
+      log(`error while preparing poll ${poll.id}:`, (err as any)?.message ?? err);
+    }
+  }
+
+  const sortedPrepared = shuffleInPlace([...prepared]);
+
+  for (const item of sortedPrepared) {
+    const { poll, channel, guild, guildId, chanId } = item;
+    try {
+      // Ensure members cache is populated, but continue with cache-only mode on fetch failure.
+      const timeoutMs = options?.force ? 1500 : 5000;
+
       if (guildId) {
         const existingFetch = memberFetchCache.get(guildId);
         if (existingFetch) {
           await existingFetch;
         } else {
-          const timeoutMs = options?.force ? 1500 : 5000;
-          const fetchPromise = waitForMembersFetch(guild, timeoutMs).catch((e) => {
-            log(`members.fetch failed:`, (e as any)?.message ?? e);
-          });
+          const fetchPromise = fetchMembersWithQueue(guild, guildId, timeoutMs);
           memberFetchCache.set(guildId, fetchPromise);
           await fetchPromise;
         }
       } else {
-        try {
-          await waitForMembersFetch(guild, options?.force ? 1500 : 5000);
-        } catch (e) {
-          log(`members.fetch failed:`, (e as any)?.message ?? e);
-        }
+        await fetchMembersWithQueue(guild, undefined, timeoutMs);
       }
 
       const toPing = computeNonResponders(poll, guild, channel);

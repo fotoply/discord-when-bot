@@ -22,6 +22,33 @@ function clearReminderConfig(guildId: string, channelId: string) {
   }
 }
 
+function testHashString(input: string): number {
+  let h = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    h = (h * 31 + input.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+function findGuildIdForStagger(maxMs: number, wanted: number): string {
+  for (let i = 0; i < 5000; i += 1) {
+    const candidate = `g-stagger-${i}`;
+    if (testHashString(candidate) % (maxMs + 1) === wanted) return candidate;
+  }
+  throw new Error("could not find matching guild id for stagger test");
+}
+
+function getPersistedReminderIds(setReminderMessageId: any): Map<string, string> {
+  const reminderCalls = setReminderMessageId.mock.calls as unknown as any[][];
+  const persistedByPoll = new Map<string, string>();
+  for (const [pollId, reminderId] of reminderCalls) {
+    if (typeof pollId === "string" && typeof reminderId === "string") {
+      persistedByPoll.set(pollId, reminderId);
+    }
+  }
+  return persistedByPoll;
+}
+
 describe("util/reminders", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -391,8 +418,12 @@ describe("util/reminders", () => {
     await sendReminders(client, Polls);
 
     expect(sendMock).toHaveBeenCalledTimes(2);
-    expect(setReminderMessageId).toHaveBeenCalledWith("pa-same-run", "new-a-same-run");
-    expect(setReminderMessageId).toHaveBeenCalledWith("pb-same-run", "new-b-same-run");
+    const persistedByPoll = getPersistedReminderIds(setReminderMessageId);
+    expect(persistedByPoll.get("pa-same-run")).toMatch(/^new-[ab]-same-run$/);
+    expect(persistedByPoll.get("pb-same-run")).toMatch(/^new-[ab]-same-run$/);
+    expect(new Set(persistedByPoll.values())).toEqual(
+      new Set(["new-a-same-run", "new-b-same-run"]),
+    );
   });
 
   it("sends a reminder for each open poll when forced for a single channel", async () => {
@@ -473,13 +504,15 @@ describe("util/reminders", () => {
 
     expect(sendTarget).toHaveBeenCalledTimes(2);
     expect(sendOther).not.toHaveBeenCalled();
-    expect(setReminderMessageId).toHaveBeenCalledWith(
-      "pa-channel-force",
-      "new-a-channel-force",
+    const persistedByPoll = getPersistedReminderIds(setReminderMessageId);
+    expect(persistedByPoll.get("pa-channel-force")).toMatch(
+      /^new-[ab]-channel-force$/,
     );
-    expect(setReminderMessageId).toHaveBeenCalledWith(
-      "pb-channel-force",
-      "new-b-channel-force",
+    expect(persistedByPoll.get("pb-channel-force")).toMatch(
+      /^new-[ab]-channel-force$/,
+    );
+    expect(new Set(persistedByPoll.values())).toEqual(
+      new Set(["new-a-channel-force", "new-b-channel-force"]),
     );
   });
 
@@ -538,15 +571,140 @@ describe("util/reminders", () => {
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(sendMock).toHaveBeenCalledTimes(2);
-      expect(setReminderMessageId).toHaveBeenCalledWith(
-        "pa-channel-timeout",
-        "new-a-channel-timeout",
+      const persistedByPoll = getPersistedReminderIds(setReminderMessageId);
+      expect(persistedByPoll.get("pa-channel-timeout")).toMatch(
+        /^new-[ab]-channel-timeout$/,
       );
-      expect(setReminderMessageId).toHaveBeenCalledWith(
-        "pb-channel-timeout",
-        "new-b-channel-timeout",
+      expect(persistedByPoll.get("pb-channel-timeout")).toMatch(
+        /^new-[ab]-channel-timeout$/,
+      );
+      expect(new Set(persistedByPoll.values())).toEqual(
+        new Set(["new-a-channel-timeout", "new-b-channel-timeout"]),
       );
     } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("randomizes poll processing order globally", async () => {
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
+
+    clearReminderConfig("g-rand-a", "c-rand-a");
+    clearReminderConfig("g-rand-b", "c-rand-b");
+
+    const pollA = {
+      id: "p-rand-a",
+      channelId: "c-rand-a",
+      messageId: "poll-rand-a",
+      selections: makeSelections(["u1"]),
+    };
+    const pollB = {
+      id: "p-rand-b",
+      channelId: "c-rand-b",
+      messageId: "poll-rand-b",
+      selections: makeSelections(["u9"]),
+    };
+    const Polls = {
+      allOpen: vi.fn(() => [pollA, pollB]),
+      setReminderMessageId: vi.fn(),
+    } as any;
+
+    const fetchOrder: string[] = [];
+    const makeChannel = (guildId: string, memberA: string, memberB: string) => ({
+      id: `c-${guildId}`,
+      guild: {
+        id: guildId,
+        members: {
+          cache: new Map<string, any>([
+            [memberA, { id: memberA, user: { bot: false } }],
+            [memberB, { id: memberB, user: { bot: false } }],
+          ]),
+          fetch: vi.fn(async () => {
+            fetchOrder.push(guildId);
+          }),
+        },
+      },
+      send: vi.fn(async () => ({ id: `new-${guildId}` })),
+      messages: { delete: vi.fn() },
+    });
+
+    const channelA = makeChannel("g-rand-a", "u1", "u2");
+    const channelB = makeChannel("g-rand-b", "u9", "u10");
+
+    const client = {
+      channels: {
+        fetch: vi.fn(async (id: string) => {
+          if (id === "c-rand-a") return channelA;
+          if (id === "c-rand-b") return channelB;
+          return null;
+        }),
+      },
+    } as any;
+
+    try {
+      await sendReminders(client, Polls, { force: true });
+
+      expect(fetchOrder).toEqual(["g-rand-b", "g-rand-a"]);
+    } finally {
+      randomSpy.mockRestore();
+    }
+  });
+
+  it("applies deterministic per-guild start staggering before member fetch", async () => {
+    vi.useFakeTimers();
+    const prevStagger = process.env.WHEN_MEMBER_FETCH_STAGGER_MAX_MS;
+    const prevJitter = process.env.WHEN_MEMBER_FETCH_JITTER_MAX_MS;
+    process.env.WHEN_MEMBER_FETCH_STAGGER_MAX_MS = "10";
+    process.env.WHEN_MEMBER_FETCH_JITTER_MAX_MS = "0";
+
+    const guildId = findGuildIdForStagger(10, 10);
+    clearReminderConfig(guildId, "c-stagger");
+    const expectedDelayMs = testHashString(guildId) % 11;
+
+    const poll = {
+      id: "p-stagger",
+      channelId: "c-stagger",
+      messageId: "poll-stagger",
+      selections: makeSelections(["u1"]),
+    };
+    const Polls = {
+      allOpen: vi.fn(() => [poll]),
+      setReminderMessageId: vi.fn(),
+    } as any;
+
+    const fetchMock = vi.fn(async () => undefined);
+    const channel = {
+      id: "c-stagger",
+      guild: {
+        id: guildId,
+        members: {
+          cache: new Map<string, any>([
+            ["u1", { id: "u1", user: { bot: false } }],
+            ["u2", { id: "u2", user: { bot: false } }],
+          ]),
+          fetch: fetchMock,
+        },
+      },
+      send: vi.fn(async () => ({ id: "new-stagger" })),
+      messages: { delete: vi.fn() },
+    } as any;
+    const client = {
+      channels: { fetch: vi.fn(async () => channel) },
+    } as any;
+
+    try {
+      const run = sendReminders(client, Polls, { force: true });
+      if (expectedDelayMs > 0) {
+        await vi.advanceTimersByTimeAsync(expectedDelayMs - 1);
+        expect(fetchMock).not.toHaveBeenCalled();
+      }
+      await vi.advanceTimersByTimeAsync(1);
+      await run;
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      process.env.WHEN_MEMBER_FETCH_STAGGER_MAX_MS = prevStagger;
+      process.env.WHEN_MEMBER_FETCH_JITTER_MAX_MS = prevJitter;
       vi.useRealTimers();
     }
   });
@@ -663,6 +821,68 @@ describe("util/reminders", () => {
     expect(setReminderMessageId).toHaveBeenCalledWith("p7", "new-7");
   });
 
+  it("filters recipients by poll roles", async () => {
+    const poll = {
+      id: "p-roles",
+      channelId: "c-roles",
+      messageId: "poll-msg-roles",
+      selections: makeSelections(["u1"]),
+      roles: ["r-team"],
+    };
+    const setReminderMessageId = vi.fn();
+    const Polls = { allOpen: vi.fn(() => [poll]), setReminderMessageId } as any;
+
+    const sendMock = vi.fn(() => Promise.resolve({ id: "new-roles" }));
+    const guild = {
+      members: {
+        cache: new Map<string, any>([
+          [
+            "u1",
+            {
+              id: "u1",
+              user: { bot: false },
+              roles: { cache: new Map([["r-team", true]]) },
+            },
+          ],
+          [
+            "u2",
+            {
+              id: "u2",
+              user: { bot: false },
+              roles: { cache: new Map([["r-team", true]]) },
+            },
+          ],
+          [
+            "u3",
+            {
+              id: "u3",
+              user: { bot: false },
+              roles: { cache: new Map([["r-other", true]]) },
+            },
+          ],
+        ]),
+        fetch: vi.fn(),
+      },
+    } as any;
+    const channel = {
+      guild,
+      send: sendMock,
+      messages: { delete: vi.fn() },
+    } as any;
+    const client = {
+      channels: { fetch: vi.fn(() => Promise.resolve(channel)) },
+    } as any;
+
+    await sendReminders(client, Polls);
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    const call = (sendMock.mock.calls as unknown as any[][])[0]!;
+    const content = (call[0] as any).content as string;
+    expect(content).toContain("<@u2>");
+    expect(content).not.toContain("<@u3>");
+    expect(setReminderMessageId).toHaveBeenCalledWith("p-roles", "new-roles");
+  });
+
   it("respects start_time schedule and interval, sending only on due ticks", async () => {
     // Turn on debug logs for this test
     const prev = process.env.WHEN_DEBUG_REMINDERS;
@@ -718,30 +938,30 @@ describe("util/reminders", () => {
       channels: { fetch: vi.fn(() => Promise.resolve(channel)) },
     } as any;
 
-    // Not due at 09:00 (before the first slot 10:00)
-    await sendReminders(client, Polls);
-    expect(sendMock).not.toHaveBeenCalled();
+    try {
+      // Not due at 09:00 (before the first slot 10:00)
+      await sendReminders(client, Polls);
+      expect(sendMock).not.toHaveBeenCalled();
 
-    // Advance to exactly 10:00 UTC -> should send
-    vi.setSystemTime(new Date(Date.UTC(2025, 0, 1, 10, 0, 0, 0)));
-    await sendReminders(client, Polls);
-    expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(setReminderMessageId).toHaveBeenCalledWith("pt", "new-time-1");
+      // Advance to exactly 10:00 UTC -> should send
+      vi.setSystemTime(new Date(Date.UTC(2025, 0, 1, 10, 0, 0, 0)));
+      await sendReminders(client, Polls);
+      expect(sendMock).toHaveBeenCalledTimes(1);
+      expect(setReminderMessageId).toHaveBeenCalledWith("pt", "new-time-1");
 
-    // Calling again at 10:00 shouldn't send twice (lastSent gate)
-    await sendReminders(client, Polls);
-    expect(sendMock).toHaveBeenCalledTimes(1);
+      // Calling again at 10:00 shouldn't send twice (lastSent gate)
+      await sendReminders(client, Polls);
+      expect(sendMock).toHaveBeenCalledTimes(1);
 
-    // Advance to 22:00 UTC (12h later) -> should send again
-    vi.setSystemTime(new Date(Date.UTC(2025, 0, 1, 22, 0, 0, 0)));
-    sendMock.mockResolvedValueOnce({ id: "new-time-2" } as any);
-    await sendReminders(client, Polls);
-    expect(sendMock).toHaveBeenCalledTimes(2);
-
-    vi.useRealTimers();
-
-    // Restore env
-    process.env.WHEN_DEBUG_REMINDERS = prev;
+      // Advance to 22:00 UTC (12h later) -> should send again
+      vi.setSystemTime(new Date(Date.UTC(2025, 0, 1, 22, 0, 0, 0)));
+      sendMock.mockResolvedValueOnce({ id: "new-time-2" } as any);
+      await sendReminders(client, Polls);
+      expect(sendMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+      process.env.WHEN_DEBUG_REMINDERS = prev;
+    }
   });
 
   it("splits long reminder mentions into multiple messages with no truncation", async () => {

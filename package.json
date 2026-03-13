@@ -24,7 +24,7 @@
     "test:watch": "vitest --watch",
     "coverage": "vitest run --coverage",
     "mutation": "stryker run",
-    "serena": "uvx --from git+https://github.com/oraios/serena serena start-mcp-server --context ide-assistant --transport streamable-http --port 9121"
+    "serena": "uvx --from git+https://github.com/oraios/serena serena start-mcp-server --context ide --transport streamable-http --port 9121"
   },
   "dependencies": {
     "@sapphire/decorators": "^6.2.0",
