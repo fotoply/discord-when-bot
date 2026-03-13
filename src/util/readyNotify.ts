@@ -1,5 +1,5 @@
 import type { Client, SendableChannels } from "discord.js";
-import { computeNonResponders } from "./reminders.js";
+import { computeEligibleMemberIds, computeNonResponders } from "./reminders.js";
 import { ReadyNotifySettings } from "../store/config.js";
 import { Polls } from "../store/polls.js";
 
@@ -29,50 +29,13 @@ type ReadyState = { timeout: ReturnType<typeof setTimeout>; dueAt: number };
 
 const timers = new Map<string, ReadyState>();
 
-// Internal: compute number of eligible members (non-bot, and matching roles when specified)
-function computeEligibleCount(poll: PollLike, guild: any): number {
-  const roleSet =
-    Array.isArray(poll.roles) && poll.roles.length
-      ? new Set(poll.roles)
-      : undefined;
-  const cache = guild.members.cache as Map<string, any> | any;
-  const iter = cache.values ? cache.values() : Object.values(cache);
-  let count = 0;
-  for (const member of iter as Iterable<any>) {
-    if (member.user?.bot) continue;
-    if (roleSet) {
-      let hasRole = false;
-      if (member.roles?.cache) {
-        for (const [rid] of (
-          member.roles.cache as Map<string, any>
-        ).entries?.() ?? []) {
-          if (roleSet.has(String(rid))) {
-            hasRole = true;
-            break;
-          }
-        }
-      } else if (Array.isArray(member.roles)) {
-        for (const r of member.roles) {
-          if (roleSet.has(String(r))) {
-            hasRole = true;
-            break;
-          }
-        }
-      }
-      if (!hasRole) continue;
-    }
-    count++;
-  }
-  return count;
-}
-
 export async function onPollActivity(
   client: Client,
   poll: PollLike,
   guild: any,
 ) {
-  const stored = Polls.get(poll.id);
-  const full: PollLike = (stored as any) ?? poll;
+  const stored = Polls.get(poll.id) as PollLike | undefined;
+  const full: PollLike = stored ?? poll;
   if (full.closed) {
     cancelFor(full.id);
     return;
@@ -81,8 +44,8 @@ export async function onPollActivity(
   // Populate guild member cache; fine to no-op when fetch is absent
   await guild.members.fetch?.();
 
-  const toPing = computeNonResponders(full as any, guild);
-  const eligibleCount = computeEligibleCount(full as any, guild);
+  const toPing = computeNonResponders(full, guild);
+  const eligibleCount = computeEligibleMemberIds(full, guild).length;
   if (!eligibleCount) {
     cancelFor(full.id);
     log(`poll ${full.id}: no eligible members`);
@@ -122,11 +85,11 @@ export async function onPollActivity(
   const timeout = setTimeout(async () => {
     timers.delete(full.id);
     const channel = await client.channels.fetch(full.channelId);
-    const guildNow = (channel as any).guild ?? guild;
+    const channelWithGuild = channel as { guild?: any };
+    const guildNow = channelWithGuild.guild ?? guild;
     await guildNow.members.fetch?.();
-    const latest = (Polls.get(full.id) as any) ?? full;
-    const stillNone =
-      computeNonResponders(latest as any, guildNow).length === 0;
+    const latest = (Polls.get(full.id) as PollLike | undefined) ?? full;
+    const stillNone = computeNonResponders(latest, guildNow).length === 0;
     if (!stillNone || latest?.closed) return;
     if (latest?.readyNotifiedAt) return; // double-check
     const content = `All set — everyone has answered. <@${full.creatorId}>, your dates are ready.`;
@@ -139,7 +102,7 @@ export async function onPollActivity(
     try {
       await (channel as SendableChannels).send(sendOptions);
       if (Polls.get(full.id)) Polls.setReadyNotifiedNow(full.id);
-      else (full as any).readyNotifiedAt = Date.now();
+      else full.readyNotifiedAt = Date.now();
       log(
         `poll ${full.id}: sent ready notification to creator ${full.creatorId}`,
       );

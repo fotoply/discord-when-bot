@@ -2,7 +2,6 @@ import type {
   Client,
   GuildMember,
   SendableChannels,
-  TextBasedChannel,
 } from "discord.js";
 import { ReminderSettings } from "../store/config.js";
 
@@ -18,12 +17,57 @@ export type SendRemindersOptions = {
 };
 
 type PreparedPoll = {
-  poll: any;
-  channel: any;
-  guild: any;
+  poll: PollLike;
+  channel: ChannelLike;
+  guild: GuildLike;
   guildId?: string;
   chanId?: string;
 };
+
+type PollLike = {
+  id: string;
+  channelId: string;
+  messageId?: string | null;
+  reminderMessageId?: string | null;
+  roles?: string[];
+  selections: Map<string, Set<string>>;
+};
+
+type MemberLike = {
+  id: string;
+  user?: { bot?: boolean };
+  roles?: { cache?: Map<unknown, unknown> } | unknown[];
+};
+
+type GuildLike = {
+  id?: string;
+  members?: {
+    cache?: unknown;
+    fetch?: () => Promise<unknown>;
+  };
+};
+
+type ChannelLike = {
+  id?: string;
+  guild?: GuildLike;
+  members?: unknown;
+  permissionsFor?: (member: MemberLike) => { has?: (perm: string) => boolean } | undefined;
+  messages?: {
+    delete: (messageId: string) => Promise<unknown>;
+  };
+  send?: (options: unknown) => Promise<{ id?: string }>;
+};
+
+function getErrorDetail(error: unknown): unknown {
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error
+  ) {
+    return (error as { message?: unknown }).message ?? error;
+  }
+  return error;
+}
 
 type FetchQueueJob<T> = {
   run: () => Promise<T>;
@@ -224,28 +268,36 @@ function splitReminderMessages(
   return out.length ? out : [prefix.trimEnd()];
 }
 
-function valuesOf<T>(cache: any): T[] {
+function valuesOf<T>(cache: unknown): T[] {
   if (!cache) return [];
-  if (typeof cache.values === "function") return Array.from(cache.values());
-  if (cache.cache) return valuesOf<T>(cache.cache);
-  return Object.values(cache) as T[];
+
+  const cacheWithValues = cache as {
+    values?: () => Iterable<T>;
+    cache?: unknown;
+  };
+  const values = cacheWithValues.values?.();
+  if (values) return Array.from(values);
+
+  if (cacheWithValues.cache) return valuesOf<T>(cacheWithValues.cache);
+  if (typeof cache === "object") return Object.values(cache as Record<string, T>);
+  return [];
 }
 
-function canAccessChannel(channel: any, member: any): boolean {
-  if (!channel || !member || typeof channel.permissionsFor !== "function") {
+function canAccessChannel(channel: ChannelLike | undefined, member: MemberLike | undefined): boolean {
+  if (!channel || !member) {
     return true;
   }
 
   try {
-    const perms = channel.permissionsFor(member);
-    if (!perms || typeof perms.has !== "function") return false;
-    return perms.has("ViewChannel") === true;
+    const perms = channel.permissionsFor?.(member);
+    if (!perms) return true;
+    return perms?.has?.("ViewChannel") === true;
   } catch {
     return false;
   }
 }
 
-function getMemberRoleIds(member: any): string[] {
+function getMemberRoleIds(member: MemberLike | undefined): string[] {
   if (Array.isArray(member?.roles)) {
     return member.roles.map((roleId: unknown) => String(roleId));
   }
@@ -257,16 +309,16 @@ function getMemberRoleIds(member: any): string[] {
 }
 
 async function waitForMembersFetch(
-  guild: any,
+  guild: GuildLike | undefined,
   timeoutMs: number,
 ): Promise<void> {
-  const fetchMembers = guild?.members?.fetch;
-  if (typeof fetchMembers !== "function") return;
+  const fetchPromise = guild?.members?.fetch?.();
+  if (!fetchPromise) return;
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
-      Promise.resolve(fetchMembers.call(guild.members)).then(() => undefined),
+      Promise.resolve(fetchPromise).then(() => undefined),
       new Promise<void>((_resolve, reject) => {
         timer = setTimeout(() => {
           reject(new Error("Members didn't arrive in time."));
@@ -279,7 +331,7 @@ async function waitForMembersFetch(
 }
 
 async function fetchMembersWithQueue(
-  guild: any,
+  guild: GuildLike,
   guildId: string | undefined,
   timeoutMs: number,
 ): Promise<void> {
@@ -293,38 +345,48 @@ async function fetchMembersWithQueue(
     } catch (e) {
       log(
         `members.fetch failed${guildId ? ` for guild ${guildId}` : ""}; using cached members only:`,
-        (e as any)?.message ?? e,
+        getErrorDetail(e),
       );
     }
   }, jitterMaxMs);
 }
 
 // Compute non-responders for a poll within a guild (excludes bots and respects poll.roles if specified)
-export function computeNonResponders(poll: any, guild: any, channel?: any): string[] {
+export function computeNonResponders(
+  poll: PollLike,
+  guild: GuildLike,
+  channel?: ChannelLike,
+): string[] {
   // Build responded set from all selections (including NONE_SELECTION)
   const responded = new Set<string>();
   for (const set of poll.selections.values()) {
     for (const userId of set) responded.add(userId);
   }
 
-  // If roles were specified for this poll, restrict candidates to members who have at least one of those roles
+  const eligibleMemberIds = computeEligibleMemberIds(poll, guild, channel);
+  return eligibleMemberIds.filter((memberId) => !responded.has(memberId));
+}
+
+export function computeEligibleMemberIds(
+  poll: PollLike,
+  guild: GuildLike,
+  channel?: ChannelLike,
+): string[] {
   const roleSet: Set<string> | undefined =
     Array.isArray(poll.roles) && poll.roles.length
       ? new Set<string>(poll.roles)
       : undefined;
 
-  // Determine non-responders: all non-bot guild members not in responded (and in roles if set)
-  const toPing: string[] = [];
-  const channelMembers = valuesOf<GuildMember>(channel?.members as any);
-  const guildMembers = valuesOf<GuildMember>(guild?.members?.cache as any);
+  const channelMembers = valuesOf<MemberLike>(channel?.members);
+  const guildMembers = valuesOf<MemberLike>(guild?.members?.cache);
   const members = channelMembers.length ? channelMembers : guildMembers;
+  const eligible: string[] = [];
 
   for (const member of members) {
-    const m: any = member as any;
-    if (m?.user?.bot) continue;
-    if (!channelMembers.length && !canAccessChannel(channel, m)) continue;
+    if (member?.user?.bot) continue;
+    if (!channelMembers.length && !canAccessChannel(channel, member)) continue;
     if (roleSet) {
-      const roleIds = getMemberRoleIds(m);
+      const roleIds = getMemberRoleIds(member);
       let hasRole = false;
       for (const roleId of roleIds) {
         if (roleSet.has(roleId)) {
@@ -334,10 +396,10 @@ export function computeNonResponders(poll: any, guild: any, channel?: any): stri
       }
       if (!hasRole) continue;
     }
-    if (responded.has(m.id)) continue;
-    toPing.push(m.id);
+    if (member?.id) eligible.push(member.id);
   }
-  return toPing;
+
+  return eligible;
 }
 
 export async function sendReminders(
@@ -345,7 +407,7 @@ export async function sendReminders(
   Polls: any,
   options?: SendRemindersOptions,
 ) {
-  const openPolls = Polls.allOpen();
+  const openPolls: PollLike[] = Polls.allOpen();
   const memberFetchCache = new Map<string, Promise<void>>();
   const configCache = new Map<
     string,
@@ -366,15 +428,15 @@ export async function sendReminders(
       const channel = (await client.channels
         .fetch(poll.channelId)
         .catch((e) => {
-          log(`fetch channel failed for ${poll.channelId}:`, e?.message ?? e);
+          log(`fetch channel failed for ${poll.channelId}:`, getErrorDetail(e));
           return null;
-        })) as any;
-      if (!channel || !("messages" in channel) || !channel.send) {
+        })) as ChannelLike | null;
+      if (!channel?.messages || !channel.send) {
         log(`skip poll ${poll.id}: channel not sendable`);
         continue;
       }
 
-      const guild = (channel as any).guild;
+      const guild = channel.guild;
       if (!guild) {
         log(`skip poll ${poll.id}: no guild on channel`);
         continue;
@@ -441,7 +503,7 @@ export async function sendReminders(
       });
     } catch (err) {
       // Ignore errors per poll to avoid blocking others
-      log(`error while preparing poll ${poll.id}:`, (err as any)?.message ?? err);
+      log(`error while preparing poll ${poll.id}:`, getErrorDetail(err));
     }
   }
 
@@ -472,12 +534,12 @@ export async function sendReminders(
       // If there's an old reminder, try to delete it regardless
       if (poll.reminderMessageId) {
         try {
-          await (channel as TextBasedChannel & any).messages.delete(
+          await channel.messages?.delete(
             poll.reminderMessageId,
           );
           log(`deleted previous reminder ${poll.reminderMessageId}`);
         } catch (e) {
-          log(`delete previous reminder failed:`, (e as any)?.message ?? e);
+          log(`delete previous reminder failed:`, getErrorDetail(e));
         }
         Polls.setReminderMessageId(poll.id, undefined);
       }
@@ -495,7 +557,13 @@ export async function sendReminders(
 
       let firstSentId: string | undefined;
       for (const content of chunks) {
-        const sendOptions: any = { content };
+        const sendOptions: {
+          content: string;
+          reply?: {
+            messageReference: string;
+            failIfNotExists: boolean;
+          };
+        } = { content };
         // When possible, make the reminder a reply to the original poll message for better context
         if (poll.messageId) {
           sendOptions.reply = {
@@ -504,7 +572,7 @@ export async function sendReminders(
           };
         }
         const sent = await (channel as SendableChannels).send(sendOptions);
-        if (!firstSentId) firstSentId = (sent as any).id;
+        if (!firstSentId && sent?.id) firstSentId = sent.id;
       }
       log(`sent ${chunks.length} reminder message(s) for poll ${poll.id}`);
       if (firstSentId) Polls.setReminderMessageId(poll.id, firstSentId);
@@ -515,7 +583,7 @@ export async function sendReminders(
       }
     } catch (err) {
       // Ignore errors per poll to avoid blocking others
-      log(`error for poll ${poll.id}:`, (err as any)?.message ?? err);
+      log(`error for poll ${poll.id}:`, getErrorDetail(err));
     }
   }
 }
