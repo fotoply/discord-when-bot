@@ -28,8 +28,12 @@ function makeGuild(memberIds: string[]) {
   return { members: { cache: members, fetch: vi.fn() } } as any;
 }
 
-function makeClient(sendSpy: any, channelId = "chan-1") {
-  const channel = { id: channelId, send: sendSpy, guild: makeGuild([]) } as any;
+function makeClient(sendSpy: any, channelId = "chan-1", guild?: any) {
+  const channel = {
+    id: channelId,
+    send: sendSpy,
+    guild: guild ?? makeGuild([]),
+  } as any;
   return {
     channels: {
       fetch: vi.fn(async (id: string) => (id === channelId ? channel : null)),
@@ -47,6 +51,8 @@ describe("util/readyNotify", () => {
     // best-effort cancel any pending timers
     cancelFor("p-ready");
     cancelFor("p2");
+    cancelFor("p-ready-fetch-activity");
+    cancelFor("p-ready-fetch-timer");
   });
 
   it("schedules a ready notification after everyone responds and clears the pending timer after quiet period", async () => {
@@ -107,5 +113,37 @@ describe("util/readyNotify", () => {
     expect(getPendingDueAt(poll.id)).toBeUndefined();
     await vi.advanceTimersByTimeAsync(2000);
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it("does not fetch members during activity checks", async () => {
+    const poll = makePoll({ id: "p-ready-fetch-activity" });
+    const guild = makeGuild(["creator-1", "u1"]);
+    const send = vi.fn(async () => ({ id: "sent-4" }));
+    const client = makeClient(send);
+
+    (poll.selections.get("2025-09-01") as Set<string>).add("u1");
+    (poll.selections.get("2025-09-01") as Set<string>).add("creator-1");
+
+    await onPollActivity(client as any, poll as any, guild);
+    expect(getPendingDueAt(poll.id)).toBeTypeOf("number");
+    expect(guild.members.fetch).not.toHaveBeenCalled();
+  });
+
+  it("still sends notification when members.fetch fails inside timer callback", async () => {
+    const poll = makePoll({ id: "p-ready-fetch-timer" });
+    const guild = makeGuild(["creator-1", "u1"]);
+    const channelGuild = makeGuild(["creator-1", "u1"]);
+    channelGuild.members.fetch.mockRejectedValueOnce(new Error("Members didn't arrive in time."));
+    const send = vi.fn(async () => ({ id: "sent-5" }));
+    const client = makeClient(send, "chan-1", channelGuild);
+
+    (poll.selections.get("2025-09-01") as Set<string>).add("u1");
+    (poll.selections.get("2025-09-01") as Set<string>).add("creator-1");
+
+    await onPollActivity(client as any, poll as any, guild);
+    await vi.advanceTimersByTimeAsync(1100);
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(channelGuild.members.fetch).toHaveBeenCalledTimes(1);
   });
 });

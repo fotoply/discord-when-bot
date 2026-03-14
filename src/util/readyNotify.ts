@@ -8,6 +8,24 @@ function log(...args: any[]) {
   console.log("[ready]", ...args);
 }
 
+function getErrorDetail(error: unknown): unknown {
+  if (error && typeof error === "object" && "message" in error) {
+    return (error as { message?: unknown }).message ?? error;
+  }
+  return error;
+}
+
+async function fetchMembersBestEffort(guild: any, pollId: string, phase: string) {
+  try {
+    await guild?.members?.fetch?.();
+  } catch (error) {
+    log(
+      `poll ${pollId}: members.fetch failed during ${phase}; using cached members only:`,
+      getErrorDetail(error),
+    );
+  }
+}
+
 // Back-compat default for tests that invoke setQuietDelayMs directly
 let OVERRIDE_DELAY_MS: number | undefined;
 export function setQuietDelayMs(ms: number) {
@@ -41,16 +59,7 @@ export async function onPollActivity(
     return;
   }
 
-  // Populate guild member cache; fine to no-op when fetch is absent
-  await guild.members.fetch?.();
-
   const toPing = computeNonResponders(full, guild);
-  const eligibleCount = computeEligibleMemberIds(full, guild).length;
-  if (!eligibleCount) {
-    cancelFor(full.id);
-    log(`poll ${full.id}: no eligible members`);
-    return;
-  }
 
   const cfg = ReadyNotifySettings.get(guild.id, full.channelId);
   const delayMs = OVERRIDE_DELAY_MS ?? cfg.delayMs;
@@ -87,8 +96,13 @@ export async function onPollActivity(
     const channel = await client.channels.fetch(full.channelId);
     const channelWithGuild = channel as { guild?: any };
     const guildNow = channelWithGuild.guild ?? guild;
-    await guildNow.members.fetch?.();
+    await fetchMembersBestEffort(guildNow, full.id, "timer");
     const latest = (Polls.get(full.id) as PollLike | undefined) ?? full;
+    const eligibleCount = computeEligibleMemberIds(latest, guildNow).length;
+    if (!eligibleCount) {
+      log(`poll ${full.id}: no eligible members at send time`);
+      return;
+    }
     const stillNone = computeNonResponders(latest, guildNow).length === 0;
     if (!stillNone || latest?.closed) return;
     if (latest?.readyNotifiedAt) return; // double-check
