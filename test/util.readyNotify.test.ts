@@ -133,7 +133,9 @@ describe("util/readyNotify", () => {
     const poll = makePoll({ id: "p-ready-fetch-timer" });
     const guild = makeGuild(["creator-1", "u1"]);
     const channelGuild = makeGuild(["creator-1", "u1"]);
-    channelGuild.members.fetch.mockRejectedValueOnce(new Error("Members didn't arrive in time."));
+    channelGuild.members.fetch.mockRejectedValueOnce(
+      new Error("Members didn't arrive in time."),
+    );
     const send = vi.fn(async () => ({ id: "sent-5" }));
     const client = makeClient(send, "chan-1", channelGuild);
 

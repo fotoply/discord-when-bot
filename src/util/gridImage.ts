@@ -1,6 +1,7 @@
 // @ts-nocheck
 import type { Buffer as NodeBuffer } from "node:buffer";
 import { createRequire } from "node:module";
+
 const requireCjs = createRequire(import.meta.url);
 
 export type GridImageOptions = {
@@ -20,6 +21,7 @@ export type GridImageOptions = {
 
 let CanvasMod: any; // resolved lazily
 let CanvasOverride: any = undefined;
+
 export function __setCanvasModule(mod: any) {
   CanvasOverride = mod;
 }

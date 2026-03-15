@@ -269,7 +269,9 @@ describe("InteractionCreate additional branches", () => {
     expect(reply.mock.calls[0]![0].content).toMatch(/couldn't post the poll/i);
     expect(ix.update).not.toHaveBeenCalled();
     expect(Polls.allOpen().length).toBe(before);
-    expect(Polls.allOpen().find((p) => p.channelId === "chan-no-access")).toBeUndefined();
+    expect(
+      Polls.allOpen().find((p) => p.channelId === "chan-no-access"),
+    ).toBeUndefined();
   });
 
   it("toggle replies Poll not found when poll id unknown (consolidated)", async () => {

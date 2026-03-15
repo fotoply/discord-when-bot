@@ -304,7 +304,9 @@ export function buildPollMessage(
   files?: any[];
   attachments?: any[];
 } {
-  const withAudienceMentions = <T extends { content?: string }>(message: T): T => {
+  const withAudienceMentions = <T extends { content?: string }>(
+    message: T,
+  ): T => {
     const mentions =
       Array.isArray(poll.roles) && poll.roles.length
         ? poll.roles.map((roleId) => `<@&${roleId}>`).join(" ")

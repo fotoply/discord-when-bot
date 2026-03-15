@@ -1,6 +1,9 @@
 import { ApplyOptions } from "@sapphire/decorators";
 import { Command } from "@sapphire/framework";
-import type { ChatInputCommandInteraction, SelectMenuComponentOptionData } from "discord.js";
+import type {
+  ChatInputCommandInteraction,
+  SelectMenuComponentOptionData,
+} from "discord.js";
 import { ActionRowBuilder, StringSelectMenuBuilder } from "discord.js";
 import { buildFutureDates, formatDateLabel } from "../util/date.js";
 import { Sessions } from "../store/sessions.js";
@@ -43,7 +46,8 @@ export default class WhenCommand extends Command {
 
     // Compute page size based on nav presence so that dates + nav <= 25
     const hasPrev = start > 0;
-    const nextAssume = start + (25 - (hasPrev ? 1 : 0) - 1) < allFirstDates.length;
+    const nextAssume =
+      start + (25 - (hasPrev ? 1 : 0) - 1) < allFirstDates.length;
     const pageSize = 25 - (hasPrev ? 1 : 0) - (nextAssume ? 1 : 0);
     const page = allFirstDates.slice(start, start + pageSize);
     const hasNext = start + page.length < allFirstDates.length;
@@ -71,10 +75,12 @@ export default class WhenCommand extends Command {
       .setMaxValues(1)
       .addOptions(...firstOptions);
 
-    const lastOptions: SelectMenuComponentOptionData[] = isoDates.map((iso) => ({
-      label: formatDateLabel(iso),
-      value: iso,
-    }));
+    const lastOptions: SelectMenuComponentOptionData[] = isoDates.map(
+      (iso) => ({
+        label: formatDateLabel(iso),
+        value: iso,
+      }),
+    );
 
     const lastSelect = new StringSelectMenuBuilder()
       .setCustomId(CUSTOM_ID.LAST)

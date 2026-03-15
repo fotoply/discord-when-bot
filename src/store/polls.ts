@@ -363,4 +363,3 @@ class PollStore {
 }
 
 export const Polls = new PollStore();
-

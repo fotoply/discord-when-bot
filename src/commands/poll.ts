@@ -148,7 +148,10 @@ export default class PollCommand extends Command {
               .catch(() => null);
             if (oldMsg) {
               await oldMsg.delete().catch((err: unknown) => {
-                log(`repost: failed to delete old message ${poll.messageId}`, err);
+                log(
+                  `repost: failed to delete old message ${poll.messageId}`,
+                  err,
+                );
               });
               log(`repost: deleted old message ${poll.messageId}`);
             }
@@ -274,7 +277,10 @@ export default class PollCommand extends Command {
 
         // If someone else already acknowledged the interaction (rare, but can happen in some mocked/test shapes),
         // fall back to followUp.
-        if ((interaction.deferred || interaction.replied) && interaction.followUp) {
+        if (
+          (interaction.deferred || interaction.replied) &&
+          interaction.followUp
+        ) {
           await interaction
             .followUp({ content, ephemeral: true })
             .catch((err: unknown) => {

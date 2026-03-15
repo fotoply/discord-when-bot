@@ -38,7 +38,9 @@ function findGuildIdForStagger(maxMs: number, wanted: number): string {
   throw new Error("could not find matching guild id for stagger test");
 }
 
-function getPersistedReminderIds(setReminderMessageId: any): Map<string, string> {
+function getPersistedReminderIds(
+  setReminderMessageId: any,
+): Map<string, string> {
   const reminderCalls = setReminderMessageId.mock.calls as unknown as any[][];
   const persistedByPoll = new Map<string, string>();
   for (const [pollId, reminderId] of reminderCalls) {
@@ -365,8 +367,14 @@ describe("util/reminders", () => {
     expect(contentA).not.toContain("<@u3>");
     expect(contentB).toContain("<@u3>");
     expect(contentB).not.toContain("<@u2>");
-    expect(setReminderMessageId).toHaveBeenCalledWith("pa-scope", "new-a-scope");
-    expect(setReminderMessageId).toHaveBeenCalledWith("pb-scope", "new-b-scope");
+    expect(setReminderMessageId).toHaveBeenCalledWith(
+      "pa-scope",
+      "new-a-scope",
+    );
+    expect(setReminderMessageId).toHaveBeenCalledWith(
+      "pb-scope",
+      "new-b-scope",
+    );
   });
 
   it("does not let one poll throttle later polls in the same channel during the same run", async () => {
@@ -610,7 +618,11 @@ describe("util/reminders", () => {
     } as any;
 
     const fetchOrder: string[] = [];
-    const makeChannel = (guildId: string, memberA: string, memberB: string) => ({
+    const makeChannel = (
+      guildId: string,
+      memberA: string,
+      memberB: string,
+    ) => ({
       id: `c-${guildId}`,
       guild: {
         id: guildId,

@@ -239,7 +239,10 @@ export default class RemindCommand extends Command {
       const enabledChoice = interaction.options.getString("enabled");
       const delayStr = interaction.options.getString("delay") ?? undefined;
 
-      if (enabledChoice === "show" || (!enabledChoice && delayStr === undefined)) {
+      if (
+        enabledChoice === "show" ||
+        (!enabledChoice && delayStr === undefined)
+      ) {
         const current = ReadyNotifySettings.get(guildId, channelId);
         const mins = Math.round(current.delayMs / 60000);
         await interaction.reply({

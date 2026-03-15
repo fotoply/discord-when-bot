@@ -46,10 +46,7 @@ async function getUser(
   return undefined;
 }
 
-export async function buildGridExtras(
-  poll: Poll,
-  context: GridExtrasContext,
-) {
+export async function buildGridExtras(poll: Poll, context: GridExtrasContext) {
   const usersSet = new Set<string>();
   for (const [, set] of poll.selections) for (const u of set) usersSet.add(u);
   const userIds = Array.from(usersSet).sort();

@@ -15,7 +15,11 @@ function getErrorDetail(error: unknown): unknown {
   return error;
 }
 
-async function fetchMembersBestEffort(guild: any, pollId: string, phase: string) {
+async function fetchMembersBestEffort(
+  guild: any,
+  pollId: string,
+  phase: string,
+) {
   try {
     await guild?.members?.fetch?.();
   } catch (error) {
@@ -28,6 +32,7 @@ async function fetchMembersBestEffort(guild: any, pollId: string, phase: string)
 
 // Back-compat default for tests that invoke setQuietDelayMs directly
 let OVERRIDE_DELAY_MS: number | undefined;
+
 export function setQuietDelayMs(ms: number) {
   OVERRIDE_DELAY_MS = Math.max(0, Math.floor(ms));
 }

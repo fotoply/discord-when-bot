@@ -17,7 +17,10 @@ describe("/when pagination", () => {
   });
 
   it("first page shows 24 dates + Next (<=25 total)", async () => {
-    const slash = await fw.emitSlash("when", { channelId: "chan-page1", userId: "u1" });
+    const slash = await fw.emitSlash("when", {
+      channelId: "chan-page1",
+      userId: "u1",
+    });
     expect(slash.reply).toHaveBeenCalled();
     const replyArg = slash.reply.mock.calls[0][0];
     const opts = getSelectOptionsFrom(replyArg, 0);
@@ -29,7 +32,12 @@ describe("/when pagination", () => {
 
   it("middle page shows 23 dates + Prev + Next (25 total)", async () => {
     await fw.emitSlash("when", { channelId: "chan-mid", userId: "u2" });
-    const ix1 = await fw.emitSelect("when:first", [NAV.FIRST_NEXT], "u2", "chan-mid");
+    const ix1 = await fw.emitSelect(
+      "when:first",
+      [NAV.FIRST_NEXT],
+      "u2",
+      "chan-mid",
+    );
     expect(ix1.update).toHaveBeenCalled();
     const nextUpdate = ix1.update.mock.calls[0][0];
     const opts = getSelectOptionsFrom(nextUpdate, 0);
@@ -40,7 +48,10 @@ describe("/when pagination", () => {
   });
 
   it("last page shows Prev only and at least one date (<=25 total)", async () => {
-    const slash = await fw.emitSlash("when", { channelId: "chan-last", userId: "u3" });
+    const slash = await fw.emitSlash("when", {
+      channelId: "chan-last",
+      userId: "u3",
+    });
     let hasNext = true;
     let lastUpdateArg: any = slash.reply.mock.calls[0][0];
     for (let i = 0; i < 10 && hasNext; i++) {
@@ -48,7 +59,12 @@ describe("/when pagination", () => {
       const values = opts.map((o: any) => o.value);
       hasNext = values.includes(NAV.FIRST_NEXT);
       if (!hasNext) break;
-      const ix = await fw.emitSelect("when:first", [NAV.FIRST_NEXT], "u3", "chan-last");
+      const ix = await fw.emitSelect(
+        "when:first",
+        [NAV.FIRST_NEXT],
+        "u3",
+        "chan-last",
+      );
       expect(ix.update).toHaveBeenCalled();
       lastUpdateArg = ix.update.mock.calls[0][0];
     }
@@ -62,17 +78,32 @@ describe("/when pagination", () => {
   });
 
   it("navigating back from last page shows Prev + Next again (25 total)", async () => {
-    const slash = await fw.emitSlash("when", { channelId: "chan-back", userId: "u5" });
+    const slash = await fw.emitSlash("when", {
+      channelId: "chan-back",
+      userId: "u5",
+    });
     // Go to last page
     let updateArg: any = slash.reply.mock.calls[0][0];
     for (let i = 0; i < 10; i++) {
-      const values = getSelectOptionsFrom(updateArg, 0).map((o: any) => o.value);
+      const values = getSelectOptionsFrom(updateArg, 0).map(
+        (o: any) => o.value,
+      );
       if (!values.includes(NAV.FIRST_NEXT)) break;
-      const ix = await fw.emitSelect("when:first", [NAV.FIRST_NEXT], "u5", "chan-back");
+      const ix = await fw.emitSelect(
+        "when:first",
+        [NAV.FIRST_NEXT],
+        "u5",
+        "chan-back",
+      );
       updateArg = ix.update.mock.calls[0][0];
     }
     // Now press Prev once
-    const ixPrev = await fw.emitSelect("when:first", [NAV.FIRST_PREV], "u5", "chan-back");
+    const ixPrev = await fw.emitSelect(
+      "when:first",
+      [NAV.FIRST_PREV],
+      "u5",
+      "chan-back",
+    );
     expect(ixPrev.update).toHaveBeenCalled();
     const backArg = ixPrev.update.mock.calls[0][0];
     const opts = getSelectOptionsFrom(backArg, 0);
@@ -83,10 +114,16 @@ describe("/when pagination", () => {
   });
 
   it("last-date options are the next 20 days from the selected first", async () => {
-    const slash = await fw.emitSlash("when", { channelId: "chan-20", userId: "u4" });
+    const slash = await fw.emitSlash("when", {
+      channelId: "chan-20",
+      userId: "u4",
+    });
     const replyArg = slash.reply.mock.calls[0][0];
     const firstOptions = getSelectOptionsFrom(replyArg, 0);
-    const firstReal = firstOptions.find((o: any) => typeof o.value === "string" && !String(o.value).startsWith("__nav:"));
+    const firstReal = firstOptions.find(
+      (o: any) =>
+        typeof o.value === "string" && !String(o.value).startsWith("__nav:"),
+    );
     const first = firstReal!.value;
 
     const ix = await fw.emitSelect("when:first", [first], "u4", "chan-20");

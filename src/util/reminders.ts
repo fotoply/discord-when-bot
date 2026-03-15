@@ -1,8 +1,4 @@
-import type {
-  Client,
-  GuildMember,
-  SendableChannels,
-} from "discord.js";
+import type { Client, SendableChannels } from "discord.js";
 import { ReminderSettings } from "../store/config.js";
 
 function log(...args: any[]) {
@@ -51,7 +47,9 @@ type ChannelLike = {
   id?: string;
   guild?: GuildLike;
   members?: unknown;
-  permissionsFor?: (member: MemberLike) => { has?: (perm: string) => boolean } | undefined;
+  permissionsFor?: (
+    member: MemberLike,
+  ) => { has?: (perm: string) => boolean } | undefined;
   messages?: {
     delete: (messageId: string) => Promise<unknown>;
   };
@@ -59,11 +57,7 @@ type ChannelLike = {
 };
 
 function getErrorDetail(error: unknown): unknown {
-  if (
-    error &&
-    typeof error === "object" &&
-    "message" in error
-  ) {
+  if (error && typeof error === "object" && "message" in error) {
     return (error as { message?: unknown }).message ?? error;
   }
   return error;
@@ -100,7 +94,10 @@ function getPositiveIntEnv(name: string, fallback: number): number {
 function getFetchQueueConcurrency(): number {
   return Math.max(
     1,
-    getPositiveIntEnv("WHEN_MEMBER_FETCH_QUEUE_CONCURRENCY", DEFAULT_FETCH_CONCURRENCY),
+    getPositiveIntEnv(
+      "WHEN_MEMBER_FETCH_QUEUE_CONCURRENCY",
+      DEFAULT_FETCH_CONCURRENCY,
+    ),
   );
 }
 
@@ -279,11 +276,15 @@ function valuesOf<T>(cache: unknown): T[] {
   if (values) return Array.from(values);
 
   if (cacheWithValues.cache) return valuesOf<T>(cacheWithValues.cache);
-  if (typeof cache === "object") return Object.values(cache as Record<string, T>);
+  if (typeof cache === "object")
+    return Object.values(cache as Record<string, T>);
   return [];
 }
 
-function canAccessChannel(channel: ChannelLike | undefined, member: MemberLike | undefined): boolean {
+function canAccessChannel(
+  channel: ChannelLike | undefined,
+  member: MemberLike | undefined,
+): boolean {
   if (!channel || !member) {
     return true;
   }
@@ -534,9 +535,7 @@ export async function sendReminders(
       // If there's an old reminder, try to delete it regardless
       if (poll.reminderMessageId) {
         try {
-          await channel.messages?.delete(
-            poll.reminderMessageId,
-          );
+          await channel.messages?.delete(poll.reminderMessageId);
           log(`deleted previous reminder ${poll.reminderMessageId}`);
         } catch (e) {
           log(`delete previous reminder failed:`, getErrorDetail(e));

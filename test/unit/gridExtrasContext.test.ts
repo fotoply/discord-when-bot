@@ -26,4 +26,3 @@ describe("gridExtrasContextFrom", () => {
     expect(ctx).toEqual({ guild, client });
   });
 });
-
