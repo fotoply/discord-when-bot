@@ -3,8 +3,7 @@ import { Command } from "@sapphire/framework";
 import type { Channel, ChatInputCommandInteraction } from "discord.js";
 import { Polls } from "../store/polls.js";
 import { buildPollMessage, clampDiscordText } from "../util/pollRender.js";
-import { DefaultRole } from "../store/config.js";
-import { PERMISSION_ADMINISTRATOR } from "../util/constants.js";
+import {PERMISSION_ADMINISTRATOR} from "../util/constants.js";
 
 function log(...args: any[]) {
   // eslint-disable-next-line no-console
@@ -41,31 +40,7 @@ export default class PollCommand extends Command {
                   .setDescription("Channel to post in (defaults to current)")
                   .setRequired(false),
               ),
-          )
-          .addSubcommand((s: any) => {
-            s.setName("defaultrole")
-              .setDescription(
-                "Admin: show or update default role for this channel",
-              )
-              .addStringOption((o: any) => {
-                o.setName("action")
-                  .setDescription("show | set | clear (defaults to show)")
-                  .setRequired(false)
-                  .addChoices(
-                    { name: "show", value: "show" },
-                    { name: "set", value: "set" },
-                    { name: "clear", value: "clear" },
-                  );
-                return o;
-              })
-              .addRoleOption((o: any) =>
-                o
-                  .setName("role")
-                  .setDescription("Role to set as default (for action=set)")
-                  .setRequired(false),
-              );
-            return s;
-          }),
+          ),
       process.env.GUILD_ID ? { guildIds: [process.env.GUILD_ID] } : undefined,
     );
     registry.registerContextMenuCommand(
@@ -181,73 +156,6 @@ export default class PollCommand extends Command {
       return;
     }
 
-    if (sub === "defaultrole") {
-      // Inline admin check to keep tests working even when calling with a plain object for `this`
-      const member: any = interaction.member as any;
-      const isAdmin =
-        member?.permissions?.has?.(PERMISSION_ADMINISTRATOR) === true;
-      if (!isAdmin) {
-        await interaction.reply({
-          content: "Only an administrator can use this command.",
-          ephemeral: true,
-        });
-        return;
-      }
-      if (!interaction.guild || !interaction.channel) {
-        await interaction.reply({
-          content: "This command must be used in a guild text channel.",
-          ephemeral: true,
-        });
-        return;
-      }
-      const action = interaction.options.getString("action") ?? "show";
-      const guildId = interaction.guild.id;
-      const channelId = (interaction.channel as any).id as string;
-      if (action === "show") {
-        const current = DefaultRole.get(guildId, channelId);
-        await interaction.reply({
-          content: current
-            ? `Default role for this channel: <@&${current}>`
-            : "No default role is set for this channel.",
-          ephemeral: true,
-        });
-        return;
-      }
-      if (action === "clear") {
-        DefaultRole.clear(guildId, channelId);
-        await interaction.reply({
-          content: "Cleared the default role for this channel.",
-          ephemeral: true,
-        });
-        return;
-      }
-      if (action === "set") {
-        const role = (interaction.options as any).getRole("role") as {
-          id: string;
-          name?: string;
-        } | null;
-        const rid = role?.id;
-        if (!rid) {
-          await interaction.reply({
-            content: "Please specify a role to set.",
-            ephemeral: true,
-          });
-          return;
-        }
-        DefaultRole.set(guildId, channelId, rid);
-        await interaction.reply({
-          content: `Default role set to <@&${rid}> for this channel.`,
-          ephemeral: true,
-        });
-        return;
-      }
-      await interaction.reply({
-        content: "Unknown action. Use show | set | clear.",
-        ephemeral: true,
-      });
-      return;
-    }
-
     await interaction.reply({
       content: "Unknown subcommand.",
       ephemeral: true,
@@ -310,8 +218,7 @@ export default class PollCommand extends Command {
         return;
       }
       const member = interaction.member;
-      const isAdmin =
-        member?.permissions?.has?.(PERMISSION_ADMINISTRATOR) === true;
+      const isAdmin = member?.permissions?.has?.(PERMISSION_ADMINISTRATOR) === true;
       if (!isAdmin) {
         await respond("Only an admin can reopen polls.");
         return;

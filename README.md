@@ -28,7 +28,9 @@ npm run dev        # or: npm run build && npm start
 - Runs hourly (UTC). Per‑channel settings let you enable/disable, set an interval (hours), and an optional start time `HH:mm` (UTC, :00 minutes).
 - Commands:
   - `/remind now` — ping non‑responders right away in this channel. Replaces the previous reminder.
-  - `/remind config` — view/update settings: `enabled`, `interval_hours`, `start_time` (use `start_time:clear` to unset).
+  - `/config reminders` — show/update reminder settings (`enabled`, `interval_hours`, `start_time`; use `start_time:clear` to unset).
+  - `/config ready` — show/update ready notification settings (`enabled`, `delay`).
+  - `/config default-role` — show/set/clear the default role used for new polls in this channel.
 - Long mention lists are split across multiple messages (no truncation), and the previous reminder is removed first.
 
 ## Limits

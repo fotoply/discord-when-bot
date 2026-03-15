@@ -1,9 +1,9 @@
 // Centralized constants and helpers for permissions and component customIds
 
-export const PERMISSION_ADMINISTRATOR = "Administrator" as const;
+export const PERMISSION_ADMINISTRATOR = "Administrator";
 
 // CustomId strings used across the app
-export const CUSTOM_ID_PREFIX = "when" as const;
+export const CUSTOM_ID_PREFIX = "when";
 export const CUSTOM_ID = {
   DATE_RANGE: `${CUSTOM_ID_PREFIX}:date-range`,
   FIRST: `${CUSTOM_ID_PREFIX}:first`,

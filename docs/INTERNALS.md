@@ -20,9 +20,10 @@ This document collects the details we keep out of the README to keep it friendly
 - `src/commands/when.ts` – `/when` slash command; drives date-range pickers (first/last) via ephemeral UI.
 - `src/listeners/interactionCreate.ts` – handles select menus and buttons (toggle, toggle-all, switch view, close).
 - `src/commands/poll.ts` – utility management: list open polls, repost and reopen via context menu.
-- `src/commands/remind.ts` – `/remind now` and `/remind config` (per-channel settings).
+- `src/commands/remind.ts` – `/remind now` to trigger reminders in the current channel.
+- `src/commands/config.ts` – `/config` channel settings (`default-role`, `reminders`, `ready`).
 - `src/store/polls.ts` – in-memory cache backed by SQLite (create/toggle/close/reopen/counts, hydration, etc.).
-- `src/store/config.ts` – simple key-value store per guild/channel for reminder settings.
+- `src/store/config.ts` – simple key-value store per guild/channel for settings.
 - `src/util/pollRender.ts` – renders poll text content, clamps to 2000, builds components, grid image helper.
 - `src/util/gridImage.ts` – produces a compact “grid” PNG for the grid view (optional `canvas`).
 - `src/util/reminders.ts` – computes non‑responders and posts reminder messages per schedule.
