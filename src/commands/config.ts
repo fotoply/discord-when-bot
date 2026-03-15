@@ -116,23 +116,20 @@ export default class ConfigCommand extends Command {
   }
 
   public override async chatInputRun(interaction: ChatInputCommandInteraction) {
+    const replyEphemeral = async (content: string) =>
+      interaction.reply({ content, ephemeral: true });
+
     const member: any = interaction.member as any;
     const isAdmin =
       member?.permissions?.has?.(PERMISSION_ADMINISTRATOR) === true;
 
     if (!isAdmin) {
-      await interaction.reply({
-        content: "Only an administrator can use this command.",
-        ephemeral: true,
-      });
+      await replyEphemeral("Only an administrator can use this command.");
       return;
     }
 
     if (!interaction.guild || !interaction.channel) {
-      await interaction.reply({
-        content: "This command must be used in a guild text channel.",
-        ephemeral: true,
-      });
+      await replyEphemeral("This command must be used in a guild text channel.");
       return;
     }
 
@@ -144,21 +141,17 @@ export default class ConfigCommand extends Command {
     if (sub === "default-role") {
       if (action === "show") {
         const current = DefaultRole.get(guildId, channelId);
-        await interaction.reply({
-          content: current
+        await replyEphemeral(
+          current
             ? `Default role for this channel: <@&${current}>`
             : "No default role is set for this channel.",
-          ephemeral: true,
-        });
+        );
         return;
       }
 
       if (action === "clear") {
         DefaultRole.clear(guildId, channelId);
-        await interaction.reply({
-          content: "Cleared the default role for this channel.",
-          ephemeral: true,
-        });
+        await replyEphemeral("Cleared the default role for this channel.");
         return;
       }
 
@@ -168,34 +161,22 @@ export default class ConfigCommand extends Command {
           | null;
         const roleId = role?.id;
         if (!roleId) {
-          await interaction.reply({
-            content: "Please specify a role to set.",
-            ephemeral: true,
-          });
+          await replyEphemeral("Please specify a role to set.");
           return;
         }
         DefaultRole.set(guildId, channelId, roleId);
-        await interaction.reply({
-          content: `Default role set to <@&${roleId}> for this channel.`,
-          ephemeral: true,
-        });
+        await replyEphemeral(`Default role set to <@&${roleId}> for this channel.`);
         return;
       }
 
-      await interaction.reply({
-        content: "Unknown action. Use show | set | clear.",
-        ephemeral: true,
-      });
+      await replyEphemeral("Unknown action. Use show | set | clear.");
       return;
     }
 
     if (sub === "reminders") {
       if (action === "show") {
         const current = ReminderSettings.get(guildId, channelId);
-        await interaction.reply({
-          content: `Current reminder settings for this channel:\n- enabled: ${current.enabled}\n- intervalHours: ${current.intervalHours}${current.startTime ? `\n- startTime: ${current.startTime} (UTC)` : ""}${current.lastSent ? `\n- lastSent: ${new Date(current.lastSent).toISOString()}` : ""}`,
-          ephemeral: true,
-        });
+        await replyEphemeral(formatReminderSettings(current, "Current"));
         return;
       }
 
@@ -223,19 +204,16 @@ export default class ConfigCommand extends Command {
           } else {
             const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(startTime);
             if (!m) {
-              await interaction.reply({
-                content: "start_time must be in HH:mm (00-23:00-59) format.",
-                ephemeral: true,
-              });
+              await replyEphemeral(
+                "start_time must be in HH:mm (00-23:00-59) format.",
+              );
               return;
             }
             const minutes = Number(m[2]);
             if (minutes !== 0) {
-              await interaction.reply({
-                content:
-                  "start_time minutes must be :00 to align with the hourly scheduler.",
-                ephemeral: true,
-              });
+              await replyEphemeral(
+                "start_time minutes must be :00 to align with the hourly scheduler.",
+              );
               return;
             }
             ReminderSettings.setStartTime(guildId, channelId, startTime);
@@ -243,28 +221,18 @@ export default class ConfigCommand extends Command {
         }
 
         const updated = ReminderSettings.get(guildId, channelId);
-        await interaction.reply({
-          content: `Updated reminder settings:\n- enabled: ${updated.enabled}\n- intervalHours: ${updated.intervalHours}${updated.startTime ? `\n- startTime: ${updated.startTime} (UTC)` : ""}`,
-          ephemeral: true,
-        });
+        await replyEphemeral(formatReminderSettings(updated, "Updated"));
         return;
       }
 
-      await interaction.reply({
-        content: "Unknown action. Use show | set.",
-        ephemeral: true,
-      });
+      await replyEphemeral("Unknown action. Use show | set.");
       return;
     }
 
     if (sub === "ready") {
       if (action === "show") {
         const current = ReadyNotifySettings.get(guildId, channelId);
-        const mins = Math.round(current.delayMs / 60000);
-        await interaction.reply({
-          content: `Current ready settings for this channel:\n- enabled: ${current.enabled}\n- delay: ${mins} minute(s)`,
-          ephemeral: true,
-        });
+        await replyEphemeral(formatReadySettings(current, "Current"));
         return;
       }
 
@@ -280,37 +248,40 @@ export default class ConfigCommand extends Command {
         if (delayStr !== undefined) {
           const ms = parseDelayToMs(delayStr);
           if (ms === undefined) {
-            await interaction.reply({
-              content:
-                "Invalid delay. Use values like '5m', '30s', '1h'. Numbers imply minutes.",
-              ephemeral: true,
-            });
+            await replyEphemeral(
+              "Invalid delay. Use values like '5m', '30s', '1h'. Numbers imply minutes.",
+            );
             return;
           }
           ReadyNotifySettings.setDelayMs(guildId, channelId, ms);
         }
 
         const updated = ReadyNotifySettings.get(guildId, channelId);
-        const mins = Math.round(updated.delayMs / 60000);
-        await interaction.reply({
-          content: `Updated ready settings:\n- enabled: ${updated.enabled}\n- delay: ${mins} minute(s)`,
-          ephemeral: true,
-        });
+        await replyEphemeral(formatReadySettings(updated, "Updated"));
         return;
       }
 
-      await interaction.reply({
-        content: "Unknown action. Use show | set.",
-        ephemeral: true,
-      });
+      await replyEphemeral("Unknown action. Use show | set.");
       return;
     }
 
-    await interaction.reply({
-      content: "Unknown subcommand.",
-      ephemeral: true,
-    });
+    await replyEphemeral("Unknown subcommand.");
   }
+}
+
+function formatReminderSettings(
+  config: ReturnType<typeof ReminderSettings.get>,
+  mode: "Current" | "Updated",
+): string {
+  return `${mode} reminder settings for this channel:\n- enabled: ${config.enabled}\n- intervalHours: ${config.intervalHours}${config.startTime ? `\n- startTime: ${config.startTime} (UTC)` : ""}${mode === "Current" && config.lastSent ? `\n- lastSent: ${new Date(config.lastSent).toISOString()}` : ""}`;
+}
+
+function formatReadySettings(
+  config: ReturnType<typeof ReadyNotifySettings.get>,
+  mode: "Current" | "Updated",
+): string {
+  const mins = Math.round(config.delayMs / 60000);
+  return `${mode} ready settings for this channel:\n- enabled: ${config.enabled}\n- delay: ${mins} minute(s)`;
 }
 
 function parseDelayToMs(input: string): number | undefined {
