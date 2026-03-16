@@ -2,7 +2,7 @@
 
 A small Discord bot that helps groups pick dates. You run `/when`, pick a range, and everyone clicks buttons for the days they can do.
 
-**Note:** AI tools were heavily used when creating this.
+**Note:** AI tools were heavily used when creating this, as an exploration into agentic coding. All of the code has been reviewed by me.
 
 ## Quick start
 
